@@ -8,9 +8,9 @@ sandbox named `gradle-hub` with:
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
 - 8 CPUs and 16 GB of memory;
 - Claude Code as the Docker-managed agent;
-- Java 25, native build tools, and Codex CLI installed at creation;
+- Java 25 and native build tools installed at creation;
 - GitHub credentials resolved from each developer's host `gh` login;
-- SSH access for Orca and other remote-development clients.
+- SSH access for remote-development clients.
 
 This is a configuration repository, not a parent checkout for development
 repositories. It intentionally contains only the environment, its installation
@@ -18,13 +18,24 @@ kit, and this documentation. Development repositories are cloned independently
 inside the sandbox rather than added here as submodules or mounted from the
 host.
 
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Create the environment](#create-the-environment)
+- [Connect and clone projects](#connect-and-clone-projects)
+- [Use with other agents](#use-with-other-agents)
+- [Move changes to a host checkout](#move-changes-to-a-host-checkout)
+- [Secrets](#secrets)
+  - [Develocity access key](#develocity-access-key)
+- [Lifecycle](#lifecycle)
+- [Security boundary](#security-boundary)
+
 ## Prerequisites
 
 - Docker SBX 0.39.0 or newer;
 - GitHub CLI (`gh`) authenticated on the host;
 - OpenSSH on the host;
-- a Claude subscription or Anthropic API key;
-- Orca, Codex, or another client as desired.
+- a Claude subscription or Anthropic API key.
 
 Verify the tools and authenticate:
 
@@ -57,17 +68,17 @@ SBX_NAME=gradle-hub-alice sbx env create .
 
 The remaining examples use the default `gradle-hub` name. With an override,
 replace it with the resolved name—for example, `gradle-hub-alice.sbx` for SSH
-and Orca. Prefix later `sbx env` commands with the same assignment. Forgetting
-it on `sbx env run` would resolve the default name and could create a separate
+clients. Prefix later `sbx env` commands with the same assignment. Forgetting it
+on `sbx env run` would resolve the default name and could create a separate
 `gradle-hub` sandbox.
 
 `ai-workspace` is only the local checkout of this small configuration
 repository. It does not contain the development projects. Those are cloned
 separately under `/home/agent/projects` inside `gradle-hub`.
 
-The first creation installs `build-essential`, Java 25, and Codex CLI on top of
-Docker's Claude Code sandbox image. Later starts retain installed packages,
-private repositories, Gradle caches, and toolchains.
+The first creation installs `build-essential` and Java 25 on top of Docker's
+Claude Code sandbox image. Later starts retain installed packages, private
+repositories, Gradle caches, and toolchains.
 
 ## Connect and clone projects
 
@@ -99,29 +110,26 @@ host before creating the environment:
 sbx secret set anthropic
 ```
 
-## Use Codex
+## Use with other agents
 
-The setup kit also installs Codex CLI, so Codex users can use the same sandbox,
-projects, and Gradle cache. Connect over SSH, enter a project, and start it:
+Claude is the managed agent, but additional command-line agents can be
+installed inside the persistent sandbox and use the same projects and Gradle
+cache. For example, install and run Codex with:
 
 ```bash
-ssh gradle-hub.sbx
+ssh "${SBX_NAME:-gradle-hub}.sbx"
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+
 cd /home/agent/projects/PROJECT_A
+codex login --device-auth
 codex
 ```
 
-On first use, choose **Sign in with ChatGPT**. The resulting login state stays
-inside this persistent sandbox. It is deleted if the environment is removed.
-
-## Use with Orca
-
-1. Add the concrete SSH target `gradle-hub.sbx` in Orca.
-2. Leave user and identity file empty unless Orca requires a user; then use
-   `_default_user_`.
-3. Disable **Reuse SSH connection** under Advanced Connection.
-4. Add repositories using paths such as
-   `/home/agent/projects/PROJECT_A`.
-5. Give concurrent agents separate Git branches or Orca worktrees.
+Device-code authentication is suitable for the sandbox's headless SSH session.
+If it is not enabled for the ChatGPT account or workspace, run `codex login`
+and follow the available sign-in flow. The installation and login state remain
+until the sandbox is removed. Install other agents in the same way, following
+their official Linux installation and authentication instructions.
 
 ## Move changes to a host checkout
 

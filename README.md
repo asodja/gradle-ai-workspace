@@ -156,6 +156,36 @@ The command executes on each developer's host. The token itself is not stored
 in this repository or copied into the sandbox. Do not replace it with a literal
 token value.
 
+### Develocity access key
+
+Provision a personal Develocity access key from one Develocity-enabled Gradle
+project inside the sandbox:
+
+```bash
+ssh "${SBX_NAME:-gradle-hub}.sbx"
+cd /home/agent/projects/PROJECT_A
+./gradlew provisionDevelocityAccessKey
+```
+
+If Gradle cannot open a browser, copy the URL printed in the terminal into a
+browser on the host and complete the sign-in there. The key is stored in the
+shared Gradle User Home at:
+
+```text
+/home/agent/.gradle/develocity/keys.properties
+```
+
+This only needs to be done once per sandbox, not once per project. The key is
+available to every project and agent in that sandbox and remains across
+sandbox restarts. It is deleted when the environment is removed. Treat it like
+a password and never commit it or put a literal value in `.sbxenv.yaml`.
+
+The interactive command is the recommended setup for this persistent sandbox.
+For disposable or automated environments, Develocity also supports the
+`DEVELOCITY_ACCESS_KEY` environment variable in
+`develocity.example.com=ACCESS_KEY` form. Resolve that value from a secret
+manager at runtime rather than storing it in this repository.
+
 ## Lifecycle
 
 Stop the sandbox without losing its state:

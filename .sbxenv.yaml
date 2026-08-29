@@ -3,6 +3,10 @@ schemaVersion: "1"
 name: gradle-hub
 agent: claude
 
+sandboxOptions:
+  cpus: 8
+  memory: 16g
+
 # This repository is the small, shareable control workspace. Docker clones it
 # privately into the SBX. Actual development repositories are cloned later
 # under /home/agent/projects inside the sandbox.

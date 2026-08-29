@@ -6,6 +6,7 @@ agents against many Gradle projects. It creates one persistent sandbox named
 
 - private project clones under `/home/agent/projects`;
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
+- 8 CPUs and 16 GB of memory;
 - Claude Code as the Docker-managed agent;
 - Java 21, native build tools, and Codex CLI installed at creation;
 - GitHub credentials resolved from each developer's host `gh` login;
@@ -47,18 +48,6 @@ sbx env create .
 The first creation installs `build-essential`, Java 21, and Codex CLI on top of
 Docker's Claude Code sandbox image. Later starts retain installed packages,
 private repositories, Gradle caches, and toolchains.
-
-For machine-specific resource limits, create an ignored local override:
-
-```bash
-cp local.sbxenv.example.yaml local.sbxenv.yaml
-sbx env create . local.sbxenv.yaml
-```
-
-Use this instead of the preceding single-file create command. SBX deep-merges
-the files from left to right, so values in `local.sbxenv.yaml` override matching
-values in `.sbxenv.yaml`. Pass the same files, in the same order, to later
-`sbx env` lifecycle commands.
 
 ## Connect and clone projects
 
@@ -155,13 +144,11 @@ Stop the sandbox without losing its state:
 sbx stop gradle-hub
 ```
 
-An SSH connection or `sbx env run .` starts it again. If you use a local
-override, pass both `.` and `local.sbxenv.yaml`. Before removing the sandbox,
-commit and fetch or push every change that must be retained:
+An SSH connection or `sbx env run .` starts it again. Before removing the
+sandbox, commit and fetch or push every change that must be retained:
 
 ```bash
-sbx env run . local.sbxenv.yaml
-sbx env rm . local.sbxenv.yaml
+sbx env rm .
 ```
 
 Removing the environment deletes all private repositories, unpushed work,

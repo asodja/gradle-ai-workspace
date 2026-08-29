@@ -1,8 +1,8 @@
 # Gradle Docker SBX hub
 
 This repository defines a shared Docker SBX environment for running coding
-agents against many Gradle projects. It creates one persistent sandbox named
-`gradle-hub` with:
+agents against many Gradle projects. By default it creates one persistent
+sandbox named `gradle-hub` with:
 
 - private project clones under `/home/agent/projects`;
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
@@ -47,6 +47,19 @@ git clone TEAM_CONFIGURATION_REPOSITORY_URL ai-workspace
 cd ai-workspace
 sbx env create .
 ```
+
+The default name can be overridden per developer. Export the same value in
+every terminal that runs `sbx env` commands for this environment:
+
+```bash
+export SBX_NAME=gradle-hub-alice
+sbx env create .
+```
+
+The remaining examples use the default `gradle-hub` name. With an override,
+replace it with the resolved name—for example, `gradle-hub-alice.sbx` for SSH
+and Orca. Forgetting `SBX_NAME` on a later `sbx env run` command would resolve
+the default name and could create a separate `gradle-hub` sandbox.
 
 `ai-workspace` is only the local checkout of this small configuration
 repository. It does not contain the development projects. Those are cloned
@@ -148,7 +161,7 @@ token value.
 Stop the sandbox without losing its state:
 
 ```bash
-sbx stop gradle-hub
+sbx stop "${SBX_NAME:-gradle-hub}"
 ```
 
 An SSH connection or `sbx env run .` starts it again. Before removing the

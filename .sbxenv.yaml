@@ -1,6 +1,7 @@
 schemaVersion: "1"
 
-name: gradle-hub
+# Override per developer with: SBX_NAME=gradle-hub-yourname sbx env create .
+name: ${SBX_NAME:-gradle-hub}
 agent: claude
 
 sandboxOptions:

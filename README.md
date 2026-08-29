@@ -1,4 +1,4 @@
-# AI workspace for Gradle projects
+# Gradle Docker SBX hub
 
 This repository defines a shared Docker SBX environment for running coding
 agents against many Gradle projects. It creates one persistent sandbox named
@@ -12,9 +12,11 @@ agents against many Gradle projects. It creates one persistent sandbox named
 - GitHub credentials resolved from each developer's host `gh` login;
 - SSH access for Orca and other remote-development clients.
 
-The repository is intentionally small. It contains only the environment, its
-installation kit, and this documentation. Development repositories are not
-added as submodules or mounted from the host.
+This is a configuration repository, not a parent checkout for development
+repositories. It intentionally contains only the environment, its installation
+kit, and this documentation. Development repositories are cloned independently
+inside the sandbox rather than added here as submodules or mounted from the
+host.
 
 ## Prerequisites
 
@@ -37,13 +39,18 @@ Use `gh auth login` if `gh auth status` reports that no account is active.
 
 ## Create the environment
 
-Clone this repository, enter it, and create the declared sandbox:
+Clone this configuration repository, enter it, and create the declared
+sandbox:
 
 ```bash
-git clone TEAM_REPOSITORY_URL ai-workspace
-cd ai-workspace
+git clone TEAM_CONFIGURATION_REPOSITORY_URL gradle-sbx-config
+cd gradle-sbx-config
 sbx env create .
 ```
+
+`gradle-sbx-config` is only the local checkout of this small configuration
+repository. It does not contain the development projects. Those are cloned
+separately under `/home/agent/projects` inside `gradle-hub`.
 
 The first creation installs `build-essential`, Java 25, and Codex CLI on top of
 Docker's Claude Code sandbox image. Later starts retain installed packages,

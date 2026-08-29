@@ -1,0 +1,5 @@
+# Copy this file to local.sbxenv.yaml and adjust it for the host machine.
+sandboxOptions:
+  cpus: 8
+  memory: 16g
+

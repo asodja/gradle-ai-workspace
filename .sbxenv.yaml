@@ -1,0 +1,26 @@
+schemaVersion: "1"
+
+name: gradle-hub
+agent: codex
+
+# This repository is the small, shareable control workspace. Docker clones it
+# privately into the SBX. Actual development repositories are cloned later
+# under /home/agent/projects inside the sandbox.
+workspace:
+  path: .
+  clone: true
+
+kits:
+  - ./kits/gradle-tools
+
+# Keep Gradle's writable state on the sandbox-native filesystem. Every project
+# and agent in this sandbox shares this cache without crossing an SBX boundary.
+env:
+  GRADLE_USER_HOME: /home/agent/.gradle
+
+# Resolve the token on the host. The real token is not stored in this file or
+# copied into the sandbox.
+secrets:
+  github:
+    command: gh auth token
+    refresh: 55m

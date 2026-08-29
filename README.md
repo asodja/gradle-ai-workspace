@@ -48,18 +48,18 @@ cd ai-workspace
 sbx env create .
 ```
 
-The default name can be overridden per developer. Export the same value in
-every terminal that runs `sbx env` commands for this environment:
+The default name can be overridden per developer with an inline environment
+variable:
 
 ```bash
-export SBX_NAME=gradle-hub-alice
-sbx env create .
+SBX_NAME=gradle-hub-alice sbx env create .
 ```
 
 The remaining examples use the default `gradle-hub` name. With an override,
 replace it with the resolved name—for example, `gradle-hub-alice.sbx` for SSH
-and Orca. Forgetting `SBX_NAME` on a later `sbx env run` command would resolve
-the default name and could create a separate `gradle-hub` sandbox.
+and Orca. Prefix later `sbx env` commands with the same assignment. Forgetting
+it on `sbx env run` would resolve the default name and could create a separate
+`gradle-hub` sandbox.
 
 `ai-workspace` is only the local checkout of this small configuration
 repository. It does not contain the development projects. Those are cloned

@@ -8,7 +8,7 @@ agents against many Gradle projects. It creates one persistent sandbox named
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
 - 8 CPUs and 16 GB of memory;
 - Claude Code as the Docker-managed agent;
-- Java 21, native build tools, and Codex CLI installed at creation;
+- Java 25, native build tools, and Codex CLI installed at creation;
 - GitHub credentials resolved from each developer's host `gh` login;
 - SSH access for Orca and other remote-development clients.
 
@@ -45,7 +45,7 @@ cd ai-workspace
 sbx env create .
 ```
 
-The first creation installs `build-essential`, Java 21, and Codex CLI on top of
+The first creation installs `build-essential`, Java 25, and Codex CLI on top of
 Docker's Claude Code sandbox image. Later starts retain installed packages,
 private repositories, Gradle caches, and toolchains.
 

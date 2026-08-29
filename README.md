@@ -43,12 +43,12 @@ Clone this configuration repository, enter it, and create the declared
 sandbox:
 
 ```bash
-git clone TEAM_CONFIGURATION_REPOSITORY_URL gradle-sbx-config
-cd gradle-sbx-config
+git clone TEAM_CONFIGURATION_REPOSITORY_URL ai-workspace
+cd ai-workspace
 sbx env create .
 ```
 
-`gradle-sbx-config` is only the local checkout of this small configuration
+`ai-workspace` is only the local checkout of this small configuration
 repository. It does not contain the development projects. Those are cloned
 separately under `/home/agent/projects` inside `gradle-hub`.
 

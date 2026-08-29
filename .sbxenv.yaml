@@ -1,7 +1,7 @@
 schemaVersion: "1"
 
 name: gradle-hub
-agent: codex
+agent: claude
 
 # This repository is the small, shareable control workspace. Docker clones it
 # privately into the SBX. Actual development repositories are cloned later

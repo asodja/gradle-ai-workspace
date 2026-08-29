@@ -6,7 +6,8 @@ agents against many Gradle projects. It creates one persistent sandbox named
 
 - private project clones under `/home/agent/projects`;
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
-- Java 21 and native build tools installed at creation;
+- Claude Code as the Docker-managed agent;
+- Java 21, native build tools, and Codex CLI installed at creation;
 - GitHub credentials resolved from each developer's host `gh` login;
 - SSH access for Orca and other remote-development clients.
 
@@ -19,6 +20,7 @@ added as submodules or mounted from the host.
 - Docker SBX 0.39.0 or newer;
 - GitHub CLI (`gh`) authenticated on the host;
 - OpenSSH on the host;
+- a Claude subscription or Anthropic API key;
 - Orca, Codex, or another client as desired.
 
 Verify the tools and authenticate:
@@ -42,8 +44,9 @@ cd ai-workspace
 sbx env create .
 ```
 
-The first creation installs `build-essential` and Java 21. Later starts retain
-installed packages, private repositories, Gradle caches, and toolchains.
+The first creation installs `build-essential`, Java 21, and Codex CLI on top of
+Docker's Claude Code sandbox image. Later starts retain installed packages,
+private repositories, Gradle caches, and toolchains.
 
 For machine-specific resource limits, create an ignored local override:
 
@@ -52,8 +55,10 @@ cp local.sbxenv.example.yaml local.sbxenv.yaml
 sbx env create . local.sbxenv.yaml
 ```
 
-When using an override, pass the same files to later `sbx env` lifecycle
-commands.
+Use this instead of the preceding single-file create command. SBX deep-merges
+the files from left to right, so values in `local.sbxenv.yaml` override matching
+values in `.sbxenv.yaml`. Pass the same files, in the same order, to later
+`sbx env` lifecycle commands.
 
 ## Connect and clone projects
 
@@ -71,11 +76,33 @@ Every project and agent in this sandbox shares `/home/agent/.gradle`. Gradle's
 dependency cache, wrapper distributions, downloaded toolchains, and local build
 cache therefore remain available across projects and sandbox restarts.
 
-To attach the built-in Codex session instead of SSH:
+To attach the Docker-managed Claude session instead of SSH:
 
 ```bash
 sbx env run .
 ```
+
+If no Anthropic API key is configured, run `/login` inside Claude and sign in
+with the team's Claude subscription. To use an API key instead, store it on the
+host before creating the environment:
+
+```bash
+sbx secret set anthropic
+```
+
+## Use Codex
+
+The setup kit also installs Codex CLI, so Codex users can use the same sandbox,
+projects, and Gradle cache. Connect over SSH, enter a project, and start it:
+
+```bash
+ssh gradle-hub.sbx
+cd /home/agent/projects/PROJECT_A
+codex
+```
+
+On first use, choose **Sign in with ChatGPT**. The resulting login state stays
+inside this persistent sandbox. It is deleted if the environment is removed.
 
 ## Use with Orca
 
@@ -128,11 +155,13 @@ Stop the sandbox without losing its state:
 sbx stop gradle-hub
 ```
 
-An SSH connection or `sbx env run .` starts it again. Before removing the
-sandbox, commit and fetch or push every change that must be retained:
+An SSH connection or `sbx env run .` starts it again. If you use a local
+override, pass both `.` and `local.sbxenv.yaml`. Before removing the sandbox,
+commit and fetch or push every change that must be retained:
 
 ```bash
-sbx env rm .
+sbx env run . local.sbxenv.yaml
+sbx env rm . local.sbxenv.yaml
 ```
 
 Removing the environment deletes all private repositories, unpushed work,
@@ -153,4 +182,3 @@ credentials or other sensitive files anywhere beneath this repository.
 
 All projects and agents inside `gradle-hub` share one trust boundary. Use
 separate sandboxes when projects must not see or affect one another.
-

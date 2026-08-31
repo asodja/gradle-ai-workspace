@@ -20,6 +20,7 @@ host.
 
 ## Contents
 
+- [Overview](#overview)
 - [Prerequisites](#prerequisites)
 - [Create the environment](#create-the-environment)
 - [Lifecycle](#lifecycle)
@@ -30,6 +31,55 @@ host.
   - [Develocity access key](#develocity-access-key)
 - [Use with other agents](#use-with-other-agents)
 - [Security boundary](#security-boundary)
+
+## Overview
+
+One long-lived sandbox holds every project, agent, and build cache. The host
+keeps only this configuration repository, an SSH client, and the editor.
+
+```text
+  HOST (developer machine)
+  ┌───────────────────────────────────────────────────────────┐
+  │  ai-workspace/  — this repository, configuration only     │
+  │    .sbxenv.yaml           sandbox, resources, secrets     │
+  │    kits/gradle-tools/     JDKs and native build tools     │
+  │                                                           │
+  │  gh auth token  ─────────────────►  github secret         │
+  │  editor / AI workspace app  ─────►  ssh *.sbx             │
+  └───────────────┬──────────────────────────────┬────────────┘
+                  │ sbx env create .             │ SSH
+                  ▼                              ▼
+  SANDBOX gradle-ai-workspace — 8 CPUs, 16 GB, persistent
+  ┌───────────────────────────────────────────────────────────┐
+  │  /home/agent/projects/                                    │
+  │    PROJECT_A        PROJECT_B        PROJECT_C            │
+  │        └────────────────┴─────────────────┘               │
+  │                         ▼                                 │
+  │  /home/agent/.gradle   — shared GRADLE_USER_HOME          │
+  │    dependency cache, wrappers, toolchains, build cache,   │
+  │    Develocity access key                                  │
+  │                                                           │
+  │  agents   Claude Code (Docker-managed), Codex, others     │
+  │  tools    Java 17, Java 25, build-essential, Python 3     │
+  │                                                           │
+  │  /run/sandbox/source  — read-only copy of this repository │
+  └───────────────────────────────────────────────────────────┘
+```
+
+The arrangement follows from four decisions:
+
+- **Configuration is separate from code.** This repository declares the
+  environment; it never contains the projects. Development repositories are
+  cloned inside the sandbox, so the environment can be shared without sharing
+  anyone's working state.
+- **One sandbox, many projects.** Projects that build against each other stay
+  in a single trust boundary and a single machine-sized pool of CPU and memory.
+- **One Gradle User Home.** `GRADLE_USER_HOME` points at sandbox-native
+  storage, so downloads, toolchains, and the Develocity key are paid for once
+  and reused by every project, agent, and restart.
+- **The host stays clean.** Agents, builds, and terminals run in the sandbox.
+  The host contributes credentials over short-lived secrets and an editor over
+  SSH, and receives finished work by fetching from the sandbox as a Git remote.
 
 ## Prerequisites
 

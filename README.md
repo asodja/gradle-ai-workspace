@@ -25,8 +25,11 @@ host.
 - [Create the environment](#create-the-environment)
 - [Lifecycle](#lifecycle)
 - [Dashboard and status](#dashboard-and-status)
-- [Connect and clone projects](#connect-and-clone-projects)
+- [Set up projects](#set-up-projects)
+- [Connect to the sandbox](#connect-to-the-sandbox)
+  - [Connect over SSH or with sbx](#connect-over-ssh-or-with-sbx)
   - [Connect from an AI workspace application](#connect-from-an-ai-workspace-application)
+  - [Connect from IntelliJ IDEA](#connect-from-intellij-idea)
 - [Move changes to a host checkout](#move-changes-to-a-host-checkout)
 - [Secrets](#secrets)
   - [Develocity access key](#develocity-access-key)
@@ -166,23 +169,12 @@ sbx ls --json    # machine-readable output
 sbx ls --quiet   # sandbox names only
 ```
 
-`sbx exec` opens a shell without SSH and starts the sandbox if it is stopped:
-
-```bash
-sbx exec -it gradle-ai-workspace bash
-sbx exec -u root gradle-ai-workspace apt-get install -y PACKAGE
-```
-
-Packages installed that way survive restarts but are lost when the environment
-is removed. Add anything that must always be present to
-`kits/gradle-tools/spec.yaml` instead.
-
 If a command reports that you are not authenticated, run `sbx login`. Run
 `sbx diagnose` when connections or the dashboard misbehave.
 
-## Connect and clone projects
+## Set up projects
 
-Connect over SSH and clone as many repositories as needed:
+Connect once and clone as many repositories as needed:
 
 ```bash
 ssh gradle-ai-workspace.sbx
@@ -192,37 +184,29 @@ gh repo clone OWNER/PROJECT_A /home/agent/projects/PROJECT_A
 gh repo clone OWNER/PROJECT_B /home/agent/projects/PROJECT_B
 ```
 
+Cloning uses the `github` secret resolved from the host, so no credentials are
+entered inside the sandbox.
+
 Every project and agent in this sandbox shares `/home/agent/.gradle`. Gradle's
 dependency cache, wrapper distributions, downloaded toolchains, and local build
 cache therefore remain available across projects and sandbox restarts.
 
-To attach the Docker-managed Claude session instead of SSH:
+This is a one-time step per repository. The clones survive restarts and are
+deleted with the environment, so push or fetch anything that must outlive it.
 
-```bash
-sbx env run .
-```
+## Connect to the sandbox
 
-If no Anthropic API key is configured, run `/login` inside Claude and sign in
-with the team's Claude subscription. To use an API key instead, store it on the
-host before creating the environment:
-
-```bash
-sbx secret set anthropic
-```
-
-### Connect from an AI workspace application
-
-Docker exposes the sandbox as an OpenSSH-compatible target. Any editor or AI
-workspace application that supports remote development over SSH can use the
-same environment. Run the SSH setup once on the host and verify the connection
-before configuring the application:
+Docker exposes the sandbox as an OpenSSH-compatible target, so one environment
+is reachable from a terminal, from an editor, and from a full IDE. Run the SSH
+setup once on the host and verify the connection before configuring any
+application:
 
 ```bash
 sbx setup ssh
 ssh gradle-ai-workspace.sbx
 ```
 
-Use these connection values:
+Use these connection values wherever an application asks for them:
 
 | Setting | Value |
 | --- | --- |
@@ -237,7 +221,44 @@ with `localhost`, provide a normal SSH key, or use the host macOS username.
 The Docker-managed `ProxyCommand` selects the sandbox and supplies its default
 user without an SSH server listening on port 22.
 
-For example, in [Orca](https://www.onorca.dev/docs/ssh):
+See Docker's [editor and app integration guide](https://docs.docker.com/ai/sandboxes/integrations/)
+for how the `.sbx` SSH transport works. Docker documents VS Code, Cursor, and
+several other clients there; JetBrains IDEs are not listed but connect over the
+same transport.
+
+### Connect over SSH or with sbx
+
+A plain SSH session is the simplest way in:
+
+```bash
+ssh gradle-ai-workspace.sbx
+```
+
+`sbx` reaches the same sandbox without SSH and starts it if it is stopped:
+
+```bash
+sbx env run .                            # attach the managed Claude session
+sbx exec -it gradle-ai-workspace bash    # open a shell
+sbx exec -u root gradle-ai-workspace apt-get install -y PACKAGE
+```
+
+Packages installed that way survive restarts but are lost when the environment
+is removed. Add anything that must always be present to
+`kits/gradle-tools/spec.yaml` instead.
+
+If no Anthropic API key is configured, run `/login` inside Claude and sign in
+with the team's Claude subscription. To use an API key instead, store it on the
+host before creating the environment:
+
+```bash
+sbx secret set anthropic
+```
+
+### Connect from an AI workspace application
+
+Any editor or AI workspace application that supports remote development over
+SSH can use this environment. For example, in
+[Orca](https://www.onorca.dev/docs/ssh):
 
 1. Open **Settings → SSH** and click **Add Target**.
 2. Enter `gradle-ai-workspace.sbx` as the host. Leave the identity file unset
@@ -254,7 +275,7 @@ The relay can compile the native `node-pty` module on Linux; this environment's
 kit installs `build-essential` and Python 3 for that purpose. The initial
 connection can therefore take longer than later connections.
 
-For example, in IntelliJ IDEA:
+### Connect from IntelliJ IDEA
 
 1. Choose **File → Remote Development**, or launch **JetBrains Gateway**
    directly. Select the **SSH** provider and click **New Connection**.
@@ -285,11 +306,6 @@ Point **Gradle JVM** at one of the installed JDKs under `/usr/lib/jvm` in
 **Settings → Build, Execution, Deployment → Build Tools → Gradle**. Toolchain
 resolution then uses the same shared `/home/agent/.gradle` as every other
 project and agent in the sandbox.
-
-See Docker's [editor and app integration guide](https://docs.docker.com/ai/sandboxes/integrations/)
-for how the `.sbx` SSH transport works. Docker documents VS Code, Cursor, and
-several other clients there; JetBrains IDEs are not listed but connect over the
-same transport.
 
 ## Move changes to a host checkout
 

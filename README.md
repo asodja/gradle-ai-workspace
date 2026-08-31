@@ -24,6 +24,7 @@ host.
 - [Prerequisites](#prerequisites)
 - [Create the environment](#create-the-environment)
 - [Lifecycle](#lifecycle)
+- [Dashboard and status](#dashboard-and-status)
 - [Connect and clone projects](#connect-and-clone-projects)
   - [Connect from an AI workspace application](#connect-from-an-ai-workspace-application)
 - [Move changes to a host checkout](#move-changes-to-a-host-checkout)
@@ -142,6 +143,42 @@ secrets.
 
 Changes to kits, workspaces, secrets, or sandbox resource options require
 recreating the environment. Preserve project work before doing so.
+
+## Dashboard and status
+
+Docker Sandboxes includes an interactive dashboard. Run it on the host from any
+directory:
+
+```bash
+sbx
+```
+
+Running `sbx` with no command opens interactive mode; `sbx tui` opens the same
+dashboard explicitly. It covers every sandbox on the host, not only this
+environment's `gradle-ai-workspace`.
+
+The same information is available non-interactively, which is easier to script
+and to paste into an issue:
+
+```bash
+sbx ls           # agent, status, published ports, and workspace
+sbx ls --json    # machine-readable output
+sbx ls --quiet   # sandbox names only
+```
+
+`sbx exec` opens a shell without SSH and starts the sandbox if it is stopped:
+
+```bash
+sbx exec -it gradle-ai-workspace bash
+sbx exec -u root gradle-ai-workspace apt-get install -y PACKAGE
+```
+
+Packages installed that way survive restarts but are lost when the environment
+is removed. Add anything that must always be present to
+`kits/gradle-tools/spec.yaml` instead.
+
+If a command reports that you are not authenticated, run `sbx login`. Run
+`sbx diagnose` when connections or the dashboard misbehave.
 
 ## Connect and clone projects
 

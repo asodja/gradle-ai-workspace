@@ -1,14 +1,14 @@
-# Gradle Docker SBX hub
+# Gradle AI workspace
 
 This repository defines a shared Docker SBX environment for running coding
-agents against many Gradle projects. By default it creates one persistent
-sandbox named `gradle-hub` with:
+agents against many Gradle projects. It creates one persistent sandbox named
+`gradle-ai-workspace` with:
 
 - private project clones under `/home/agent/projects`;
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
 - 8 CPUs and 16 GB of memory;
 - Claude Code as the Docker-managed agent;
-- Java 25 and native build tools installed at creation;
+- Java 17, Java 25, and native build tools installed at creation;
 - GitHub credentials resolved from each developer's host `gh` login;
 - SSH access for remote-development clients.
 
@@ -22,12 +22,13 @@ host.
 
 - [Prerequisites](#prerequisites)
 - [Create the environment](#create-the-environment)
+- [Lifecycle](#lifecycle)
 - [Connect and clone projects](#connect-and-clone-projects)
-- [Use with other agents](#use-with-other-agents)
+  - [Connect from an AI workspace application](#connect-from-an-ai-workspace-application)
 - [Move changes to a host checkout](#move-changes-to-a-host-checkout)
 - [Secrets](#secrets)
   - [Develocity access key](#develocity-access-key)
-- [Lifecycle](#lifecycle)
+- [Use with other agents](#use-with-other-agents)
 - [Security boundary](#security-boundary)
 
 ## Prerequisites
@@ -59,33 +60,43 @@ cd ai-workspace
 sbx env create .
 ```
 
-The default name can be overridden per developer with an inline environment
-variable:
-
-```bash
-SBX_NAME=gradle-hub-alice sbx env create .
-```
-
-The remaining examples use the default `gradle-hub` name. With an override,
-replace it with the resolved name—for example, `gradle-hub-alice.sbx` for SSH
-clients. Prefix later `sbx env` commands with the same assignment. Forgetting it
-on `sbx env run` would resolve the default name and could create a separate
-`gradle-hub` sandbox.
-
 `ai-workspace` is only the local checkout of this small configuration
 repository. It does not contain the development projects. Those are cloned
-separately under `/home/agent/projects` inside `gradle-hub`.
+separately under `/home/agent/projects` inside `gradle-ai-workspace`.
 
-The first creation installs `build-essential` and Java 25 on top of Docker's
-Claude Code sandbox image. Later starts retain installed packages, private
-repositories, Gradle caches, and toolchains.
+The first creation installs `build-essential`, Python 3, Java 17, and Java 25
+on top of Docker's Claude Code sandbox image. Gradle detects both JDK
+installations for toolchain selection. Later starts retain installed packages,
+private repositories, Gradle caches, and toolchains.
+
+## Lifecycle
+
+Stop the sandbox without losing its state:
+
+```bash
+sbx stop gradle-ai-workspace
+```
+
+An SSH connection or `sbx env run .` starts it again. Before removing the
+sandbox, commit and fetch or push every change that must be retained:
+
+```bash
+sbx env rm .
+```
+
+Removing the environment deletes all private repositories, unpushed work,
+Gradle caches, downloaded toolchains, installed packages, and sandbox-scoped
+secrets.
+
+Changes to kits, workspaces, secrets, or sandbox resource options require
+recreating the environment. Preserve project work before doing so.
 
 ## Connect and clone projects
 
 Connect over SSH and clone as many repositories as needed:
 
 ```bash
-ssh gradle-hub.sbx
+ssh gradle-ai-workspace.sbx
 
 mkdir -p /home/agent/projects
 gh repo clone OWNER/PROJECT_A /home/agent/projects/PROJECT_A
@@ -110,26 +121,51 @@ host before creating the environment:
 sbx secret set anthropic
 ```
 
-## Use with other agents
+### Connect from an AI workspace application
 
-Claude is the managed agent, but additional command-line agents can be
-installed inside the persistent sandbox and use the same projects and Gradle
-cache. For example, install and run Codex with:
+Docker exposes the sandbox as an OpenSSH-compatible target. Any editor or AI
+workspace application that supports remote development over SSH can use the
+same environment. Run the SSH setup once on the host and verify the connection
+before configuring the application:
 
 ```bash
-ssh "${SBX_NAME:-gradle-hub}.sbx"
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
-
-cd /home/agent/projects/PROJECT_A
-codex login --device-auth
-codex
+sbx setup ssh
+ssh gradle-ai-workspace.sbx
 ```
 
-Device-code authentication is suitable for the sandbox's headless SSH session.
-If it is not enabled for the ChatGPT account or workspace, run `codex login`
-and follow the available sign-in flow. The installation and login state remain
-until the sandbox is removed. Install other agents in the same way, following
-their official Linux installation and authentication instructions.
+Use these connection values:
+
+| Setting | Value |
+| --- | --- |
+| SSH host | `gradle-ai-workspace.sbx` |
+| Project folder | `/home/agent/projects/PROJECT_A` |
+| Authentication | Host OpenSSH configuration created by `sbx setup ssh` |
+
+Enter the hostname manually when an application's SSH picker does not list it.
+Docker registers a wildcard `*.sbx` host in `~/.ssh/config`, so individual
+sandbox names might not appear in host pickers. Do not replace the hostname
+with `localhost`, provide a normal SSH key, or use the host macOS username.
+The Docker-managed `ProxyCommand` selects the sandbox and supplies its default
+user without an SSH server listening on port 22.
+
+For example, in [Orca](https://www.onorca.dev/docs/ssh):
+
+1. Open **Settings → SSH** and click **Add Target**.
+2. Enter `gradle-ai-workspace.sbx` as the host. Leave the identity file unset
+   and let Orca resolve the effective settings from `~/.ssh/config`.
+3. Click **Test**, verify the host key if prompted, and then click **Save**.
+4. Add an existing remote repository or folder using that SSH target and select
+   `/home/agent/projects/PROJECT_A`.
+5. Start Claude, Codex, or another installed agent. Its process, terminals,
+   Git worktrees, and builds run inside the sandbox while Orca provides the
+   local editor and diff interface.
+
+On its first connection, Orca installs a relay under `/home/agent/.orca-remote`.
+The relay can compile the native `node-pty` module on Linux; this environment's
+kit installs `build-essential` and Python 3 for that purpose. The initial
+connection can therefore take longer than later connections. See Docker's
+[editor and app integration guide](https://docs.docker.com/ai/sandboxes/integrations/)
+for how the `.sbx` SSH transport works.
 
 ## Move changes to a host checkout
 
@@ -138,13 +174,13 @@ used as an SSH Git remote from its corresponding host checkout:
 
 ```bash
 cd /path/to/host/PROJECT_A
-git remote add sbx-gradle-hub \
-  gradle-hub.sbx:/home/agent/projects/PROJECT_A
-git fetch sbx-gradle-hub
+git remote add sbx-gradle-ai-workspace \
+  gradle-ai-workspace.sbx:/home/agent/projects/PROJECT_A
+git fetch sbx-gradle-ai-workspace
 
-git log sbx-gradle-hub/ai/my-change
-git diff main..sbx-gradle-hub/ai/my-change
-git switch --track -c ai/my-change sbx-gradle-hub/ai/my-change
+git log sbx-gradle-ai-workspace/ai/my-change
+git diff main..sbx-gradle-ai-workspace/ai/my-change
+git switch --track -c ai/my-change sbx-gradle-ai-workspace/ai/my-change
 ```
 
 Alternatively, push a sandbox branch to its normal `origin` and fetch it from
@@ -170,7 +206,7 @@ Provision a personal Develocity access key from one Develocity-enabled Gradle
 project inside the sandbox:
 
 ```bash
-ssh "${SBX_NAME:-gradle-hub}.sbx"
+ssh gradle-ai-workspace.sbx
 cd /home/agent/projects/PROJECT_A
 ./gradlew provisionDevelocityAccessKey
 ```
@@ -194,27 +230,26 @@ For disposable or automated environments, Develocity also supports the
 `develocity.example.com=ACCESS_KEY` form. Resolve that value from a secret
 manager at runtime rather than storing it in this repository.
 
-## Lifecycle
+## Use with other agents
 
-Stop the sandbox without losing its state:
-
-```bash
-sbx stop "${SBX_NAME:-gradle-hub}"
-```
-
-An SSH connection or `sbx env run .` starts it again. Before removing the
-sandbox, commit and fetch or push every change that must be retained:
+Claude is the managed agent, but additional command-line agents can be
+installed inside the persistent sandbox and use the same projects and Gradle
+cache. For example, install and run Codex with:
 
 ```bash
-sbx env rm .
+ssh gradle-ai-workspace.sbx
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+
+cd /home/agent/projects/PROJECT_A
+codex login --device-auth
+codex
 ```
 
-Removing the environment deletes all private repositories, unpushed work,
-Gradle caches, downloaded toolchains, installed packages, and sandbox-scoped
-secrets.
-
-Changes to kits, workspaces, secrets, or sandbox resource options require
-recreating the environment. Preserve project work before doing so.
+Device-code authentication is suitable for the sandbox's headless SSH session.
+If it is not enabled for the ChatGPT account or workspace, run `codex login`
+and follow the available sign-in flow. The installation and login state remain
+until the sandbox is removed. Install other agents in the same way, following
+their official Linux installation and authentication instructions.
 
 ## Security boundary
 
@@ -225,5 +260,5 @@ Clone mode still exposes this host repository read-only at
 `/run/sandbox/source`, including ignored and untracked files. Do not store
 credentials or other sensitive files anywhere beneath this repository.
 
-All projects and agents inside `gradle-hub` share one trust boundary. Use
-separate sandboxes when projects must not see or affect one another.
+All projects and agents inside `gradle-ai-workspace` share one trust boundary.
+Use separate sandboxes when projects must not see or affect one another.

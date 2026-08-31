@@ -1,7 +1,6 @@
 schemaVersion: "1"
 
-# Override per developer with: SBX_NAME=gradle-hub-yourname sbx env create .
-name: ${SBX_NAME:-gradle-hub}
+name: gradle-ai-workspace
 agent: claude
 
 sandboxOptions:

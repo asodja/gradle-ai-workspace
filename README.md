@@ -8,7 +8,7 @@ agents against many Gradle projects. It creates one persistent sandbox named
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
 - 8 CPUs and 16 GB of memory;
 - Claude Code as the Docker-managed agent;
-- Java 17, Java 25, and native build tools installed at creation;
+- Java 8, Java 17, Java 25, and native build tools installed at creation;
 - GitHub credentials resolved from each developer's host `gh` login;
 - SSH access for remote-development clients.
 
@@ -60,7 +60,7 @@ keeps only this configuration repository, an SSH client, and the editor.
   │    Develocity access key                                  │
   │                                                           │
   │  agents   Claude Code (Docker-managed), Codex, others     │
-  │  tools    Java 17, Java 25, build-essential, Python 3     │
+  │  tools    Java 8/17/25, build-essential, Python 3         │
   │                                                           │
   │  /run/sandbox/source  — read-only copy of this repository │
   └───────────────────────────────────────────────────────────┘
@@ -114,10 +114,12 @@ sbx env create .
 repository. It does not contain the development projects. Those are cloned
 separately under `/home/agent/projects` inside `gradle-ai-workspace`.
 
-The first creation installs `build-essential`, Python 3, Java 17, and Java 25
-on top of Docker's Claude Code sandbox image. Gradle detects both JDK
-installations for toolchain selection. Later starts retain installed packages,
-private repositories, Gradle caches, and toolchains.
+The first creation installs `build-essential`, Python 3, Java 8, Java 17, and
+Java 25 on top of Docker's Ubuntu-based sandbox image. Gradle detects all three
+JDK installations under `/usr/lib/jvm` for toolchain selection. Java 8 comes
+from Ubuntu's `universe` component, which the base image enables by default.
+Later starts retain installed packages, private repositories, Gradle caches,
+and toolchains.
 
 ## Lifecycle
 

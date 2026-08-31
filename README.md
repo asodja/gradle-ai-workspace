@@ -213,9 +213,44 @@ For example, in [Orca](https://www.onorca.dev/docs/ssh):
 On its first connection, Orca installs a relay under `/home/agent/.orca-remote`.
 The relay can compile the native `node-pty` module on Linux; this environment's
 kit installs `build-essential` and Python 3 for that purpose. The initial
-connection can therefore take longer than later connections. See Docker's
-[editor and app integration guide](https://docs.docker.com/ai/sandboxes/integrations/)
-for how the `.sbx` SSH transport works.
+connection can therefore take longer than later connections.
+
+For example, in IntelliJ IDEA:
+
+1. Choose **File → Remote Development**, or launch **JetBrains Gateway**
+   directly. Select the **SSH** provider and click **New Connection**.
+2. In the SSH configuration dialog, enable **Parse config file ~/.ssh/config**
+   and enter `gradle-ai-workspace.sbx` as the host. Leave the port, user name,
+   and key unset; the parsed configuration supplies them.
+3. Check the connection and continue.
+4. Select an IntelliJ IDEA version for the backend, set the project directory
+   to `/home/agent/projects/PROJECT_A`, and start the connection.
+5. Open the built-in terminal in the remote IDE and start Claude, Codex, or
+   another installed agent. The agent, its terminals, and Gradle run inside the
+   sandbox while the local thin client provides the editor.
+
+Enabling **Parse config file ~/.ssh/config** is what makes this work. JetBrains
+remote development supports the `ProxyCommand` directive that Docker's `*.sbx`
+entry relies on, but not `ProxyJump`. Typing a host, port, and user name into
+the dialog by hand instead bypasses that entry and fails to connect. Existing
+configurations can be edited later under
+**Settings → Tools → SSH Configurations**.
+
+The first connection downloads the IDE backend into
+`/home/agent/.cache/JetBrains/RemoteDev/dist` and therefore takes noticeably
+longer than later ones. The backend survives sandbox restarts and is removed
+with the environment. It is self-contained on this glibc-based image and needs
+no extra packages; the kit's `curl` covers its download requirement.
+
+Point **Gradle JVM** at one of the installed JDKs under `/usr/lib/jvm` in
+**Settings → Build, Execution, Deployment → Build Tools → Gradle**. Toolchain
+resolution then uses the same shared `/home/agent/.gradle` as every other
+project and agent in the sandbox.
+
+See Docker's [editor and app integration guide](https://docs.docker.com/ai/sandboxes/integrations/)
+for how the `.sbx` SSH transport works. Docker documents VS Code, Cursor, and
+several other clients there; JetBrains IDEs are not listed but connect over the
+same transport.
 
 ## Move changes to a host checkout
 

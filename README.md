@@ -115,13 +115,13 @@ sbx env create .
 ```
 
 The sandbox root filesystem defaults to 20 GB, which a shared Gradle cache, the
-JetBrains backend, and a few project clones exhaust quickly. Disk sizes cannot
+IDE backend, and a few project clones exhaust quickly. Disk sizes cannot
 yet be declared in `.sbxenv.yaml`
 ([sbx#465](https://github.com/docker/sbx-releases/issues/465)), so set the size
 on the creation command instead:
 
 ```bash
-DOCKER_SANDBOXES_ROOT_SIZE=60g sbx env create .
+DOCKER_SANDBOXES_ROOT_SIZE=90g sbx env create .
 ```
 
 `DOCKER_SANDBOXES_DOCKER_SIZE` and `DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE`

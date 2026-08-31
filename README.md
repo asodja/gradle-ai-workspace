@@ -6,7 +6,7 @@ agents against many Gradle projects. It creates one persistent sandbox named
 
 - private project clones under `/home/agent/projects`;
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
-- 8 CPUs and 16 GB of memory;
+- 8 CPUs and 32 GB of memory;
 - Claude Code as the Docker-managed agent;
 - Java 8, Java 17, Java 25, and native build tools installed at creation;
 - GitHub credentials resolved from each developer's host `gh` login;
@@ -53,7 +53,7 @@ keeps only this configuration repository, an SSH client, and the editor.
   └───────────────┬──────────────────────────────┬────────────┘
                   │ sbx env create .             │ SSH
                   ▼                              ▼
-  SANDBOX gradle-ai-workspace — 8 CPUs, 16 GB, persistent
+  SANDBOX gradle-ai-workspace — 8 CPUs, 32 GB, persistent
   ┌───────────────────────────────────────────────────────────┐
   │  /home/agent/projects/                                    │
   │    PROJECT_A        PROJECT_B        PROJECT_C            │
@@ -114,6 +114,21 @@ cd ai-workspace
 sbx env create .
 ```
 
+The sandbox root filesystem defaults to 20 GB, which a shared Gradle cache, the
+JetBrains backend, and a few project clones exhaust quickly. Disk sizes cannot
+yet be declared in `.sbxenv.yaml`
+([sbx#465](https://github.com/docker/sbx-releases/issues/465)), so set the size
+on the creation command instead:
+
+```bash
+DOCKER_SANDBOXES_ROOT_SIZE=60g sbx env create .
+```
+
+`DOCKER_SANDBOXES_DOCKER_SIZE` and `DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE`
+size `/var/lib/docker` and the cloned workspace the same way. All three are
+read only at creation; see Docker's
+[troubleshooting guide](https://docs.docker.com/ai/sandboxes/troubleshooting/#sandbox-runs-out-of-disk-space).
+
 `ai-workspace` is only the local checkout of this small configuration
 repository. It does not contain the development projects. Those are cloned
 separately under `/home/agent/projects` inside `gradle-ai-workspace`.
@@ -145,7 +160,11 @@ Gradle caches, downloaded toolchains, installed packages, and sandbox-scoped
 secrets.
 
 Changes to kits, workspaces, secrets, or sandbox resource options require
-recreating the environment. Preserve project work before doing so.
+recreating the environment. Preserve project work before doing so. Memory,
+CPUs, and disk sizes are fixed when the sandbox is created; nothing resizes
+them in place, so raising one means creating a replacement. Creating it under a
+different `name` first lets the current sandbox keep running until the new one
+is ready.
 
 ## Dashboard and status
 
@@ -298,7 +317,10 @@ configurations can be edited later under
 
 The first connection downloads the IDE backend into
 `/home/agent/.cache/JetBrains/RemoteDev/dist` and therefore takes noticeably
-longer than later ones. The backend survives sandbox restarts and is removed
+longer than later ones. That directory is the single largest consumer of the
+root filesystem — it reached 5.7 GB here, because each backend version is kept
+alongside the previous ones. Delete the versions no longer in use when disk
+runs short. The backend survives sandbox restarts and is removed
 with the environment. It is self-contained on this glibc-based image and needs
 no extra packages; the kit's `curl` covers its download requirement.
 

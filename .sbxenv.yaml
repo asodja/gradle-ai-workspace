@@ -3,9 +3,12 @@ schemaVersion: "1"
 name: gradle-ai-workspace
 agent: claude
 
+# Gradle daemons plus parallel workers exhausted the previous 16g limit and were
+# OOM-killed. Resource options are fixed at creation; changing them needs a
+# recreate.
 sandboxOptions:
   cpus: 8
-  memory: 16g
+  memory: 32g
 
 # This repository is the small, shareable control workspace. Docker clones it
 # privately into the SBX. Actual development repositories are cloned later

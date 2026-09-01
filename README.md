@@ -168,11 +168,11 @@ preserves its name and root-filesystem data across that recreation.
 
 ### Recreate with different resources or configuration
 
-Recreation is necessary because SBX cannot change creation-time properties,
-such as memory, CPU, or disk size, in place and cannot rename a sandbox. To
-keep the stable name `gradle-ai-workspace`, save the old root filesystem as a
-local template, remove the old environment, and recreate it under the same
-name from that template.
+To change creation-time properties such as memory, CPU, or disk size, recreate
+the sandbox because SBX cannot change them in place. SBX also cannot rename a
+sandbox. To keep the stable name `gradle-ai-workspace`, save the old root
+filesystem as a local template, remove the old environment, and recreate it
+under the same name from that template.
 
 > [!WARNING]
 > This procedure has downtime, and the recreated sandbox cannot be tested

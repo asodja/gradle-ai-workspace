@@ -127,7 +127,11 @@ with a larger root filesystem for projects and the shared Gradle cache:
 ```bash
 git clone TEAM_CONFIGURATION_REPOSITORY_URL ai-workspace
 cd ai-workspace
-DOCKER_SANDBOXES_ROOT_SIZE=90g sbx env create .
+# Root filesystem, private Docker data, and private control-repository clone.
+DOCKER_SANDBOXES_ROOT_SIZE=90g \
+DOCKER_SANDBOXES_DOCKER_SIZE=10g \
+DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g \
+  sbx env create .
 ```
 
 The sandbox root filesystem defaults to 20 GB, which a shared Gradle cache, the
@@ -136,9 +140,13 @@ declared in `.sbxenv.yaml`
 ([sbx#465](https://github.com/docker/sbx-releases/issues/465)), so set the size
 on the creation command instead.
 
-`DOCKER_SANDBOXES_DOCKER_SIZE` and `DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE`
-size `/var/lib/docker` and the cloned workspace the same way. All three are
-read only at creation; see Docker's
+`DOCKER_SANDBOXES_ROOT_SIZE=90g` sizes the root filesystem containing
+`/home/agent/.gradle`, `/home/agent/projects`, installed packages, and the IDE
+backend. `DOCKER_SANDBOXES_DOCKER_SIZE=10g` sizes `/var/lib/docker` for the
+private Docker daemon's images, containers, volumes, and build cache.
+`DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g` sizes the separate private clone of
+this small configuration repository. It does not contain the Gradle cache or
+development projects. All disk capacities are fixed at creation; see Docker's
 [troubleshooting guide](https://docs.docker.com/ai/sandboxes/troubleshooting/#sandbox-runs-out-of-disk-space).
 
 `ai-workspace` is only the local checkout of this small configuration
@@ -515,14 +523,52 @@ under the same name from that template.
 > environment. Never run `sbx reset` during the migration: reset also deletes
 > locally cached templates.
 
+> [!TIP]
+> A host-side AI coding agent can carry out this procedure, update the
+> configuration, and verify the replacement. Do not run the agent inside the
+> sandbox being replaced because removing that sandbox terminates the agent.
+> Ask the agent to pause before removing the old environment and confirm that
+> the template and independent Git backups exist. For example:
+>
+> ```text
+> Recreate gradle-ai-workspace using the procedure in README.md with the new
+> resource settings. Preserve all project work and the Gradle cache. Before
+> removing the old environment, verify the migration template and Git backups
+> and show me the result. After recreation, verify disk sizes, project Git
+> status, restored data, and a representative offline Gradle build. Keep the
+> migration template until I confirm that the replacement is good.
+> ```
+
 The template preserves the writable root filesystem, including
 `/home/agent/.gradle`, `/home/agent/projects`, installed packages, downloaded
 toolchains, and other files under `/home/agent`. Commit and push or fetch all
 important Git work as an independent backup anyway. Stop active builds and the
-sandbox, save it under a unique local tag, and confirm that the tag exists:
+sandbox, then confirm that it is stopped:
 
 ```bash
 sbx stop gradle-ai-workspace
+sbx ls
+```
+
+If stopping fails with `context deadline exceeded`, the runtime may be stuck.
+Stop active agents and builds, then restart the SBX daemon and check the state
+again:
+
+```bash
+sbx daemon restart
+sbx ls
+```
+
+Restarting the daemon interrupts activity in every local sandbox. If the target
+still appears as running, retry `sbx stop gradle-ai-workspace` and check again.
+Do not continue until the target is stopped and has no active sessions. The
+`--force` option on `sbx env rm` only bypasses its confirmation prompt; it is
+not a workaround for a stuck runtime.
+
+Save the stopped sandbox under a unique local tag and confirm that the tag
+exists:
+
+```bash
 sbx template save \
   gradle-ai-workspace \
   gradle-ai-workspace-migration:2026-09-01
@@ -566,9 +612,10 @@ after upgrading in case that limit changes. Disk capacities are independent
 and must be supplied when the replacement is created:
 
 ```bash
+# Root filesystem, private Docker data, and private control-repository clone.
 DOCKER_SANDBOXES_ROOT_SIZE=90g \
-DOCKER_SANDBOXES_DOCKER_SIZE=50g \
-DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=50g \
+DOCKER_SANDBOXES_DOCKER_SIZE=10g \
+DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g \
   sbx env create . restore.sbxenv.yaml
 ```
 
@@ -576,8 +623,8 @@ The disk variables control different data:
 
 - `DOCKER_SANDBOXES_ROOT_SIZE` contains `/home/agent/.gradle`,
   `/home/agent/projects`, installed packages, and most sandbox state;
-- `DOCKER_SANDBOXES_DOCKER_SIZE` contains the private Docker daemon's
-  `/var/lib/docker` data;
+- `DOCKER_SANDBOXES_DOCKER_SIZE` contains the private Docker daemon's images,
+  containers, volumes, and build cache under `/var/lib/docker`;
 - `DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE` contains the private clone of this
   control repository because `workspace.clone` is enabled.
 

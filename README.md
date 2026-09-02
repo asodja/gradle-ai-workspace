@@ -32,6 +32,7 @@ host.
   - [Connect from an AI workspace application](#connect-from-an-ai-workspace-application)
   - [Connect from IntelliJ IDEA](#connect-from-intellij-idea)
 - [Move changes to a host checkout](#move-changes-to-a-host-checkout)
+- [Commit signing](#commit-signing)
 - [Secrets](#secrets)
   - [Develocity access key](#develocity-access-key)
 - [Use with other agents](#use-with-other-agents)
@@ -463,6 +464,62 @@ git switch --track -c ai/my-change sbx-gradle-ai-workspace/ai/my-change
 
 Alternatively, push a sandbox branch to its normal `origin` and fetch it from
 the host.
+
+## Commit signing
+
+Docker forwards the host SSH agent into the sandbox, so Git can sign commits
+without copying a private key into the environment or this repository.
+
+First, on the host, inspect the fingerprint of the intended public key, load
+its private key, and confirm that the same fingerprint appears in the agent:
+
+```bash
+ssh-keygen -lf ~/.ssh/id_ed25519.pub # Show the intended public key's fingerprint.
+ssh-add ~/.ssh/id_ed25519            # Load its private key into the host SSH agent.
+ssh-add -l                           # List fingerprints available through the agent.
+```
+
+Replace `id_ed25519` with the path to the key you intend to use. Register its
+public key with GitHub as a signing key using the CLI:
+
+```bash
+gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "SBX sandbox commit signing" # Add the public key as a GitHub signing key.
+```
+
+Alternatively, in the GitHub UI, open `Profile picture → Settings`, then
+under `Access` select [SSH and GPG keys](https://github.com/settings/keys) →
+`New SSH key`. Select `Signing Key` as the key type, paste the public key, and
+add it.
+
+An SSH key already registered for authentication must be registered a second
+time as a signing key. Registering the key is a one-time, per-user operation;
+the shared setup cannot make that change to a developer's GitHub account.
+
+Next, connect to the sandbox and inspect both the fingerprints and complete
+public keys forwarded by the host agent:
+
+```bash
+ssh gradle-ai-workspace.sbx # Connect to the sandbox.
+ssh-add -l                  # List forwarded key fingerprints.
+ssh-add -L                  # Show the complete forwarded public keys.
+```
+
+Copy the selected public key exactly as shown by `ssh-add -L`, then configure
+Git inside the sandbox. The following public key is only an example; replace it
+with the complete selected public key:
+
+```bash
+git config --global gpg.format ssh                                                # Use SSH signatures.
+git config --global user.signingkey 'key::ssh-ed25519 AAAAC3... developer@example.com' # Select the public signing key.
+git config --global commit.gpgsign true                                           # Sign commits automatically.
+```
+
+Also ensure `git config --global user.email` is an email associated with the
+GitHub account. New commits are now signed automatically.
+
+If `ssh-add -L` inside the sandbox reports no identities, load the key on the
+host and reconnect. GitHub displays `Verified` after a commit signed by the
+registered key is pushed.
 
 ## Secrets
 

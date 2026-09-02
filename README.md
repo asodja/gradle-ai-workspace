@@ -21,22 +21,27 @@ host.
 ## Contents
 
 - [Overview](#overview)
-- [Prerequisites](#prerequisites)
-- [Create the environment](#create-the-environment)
-- [Lifecycle](#lifecycle)
+- [Setup](#setup)
+  - [Prepare the host](#prepare-the-host)
+  - [Create the environment](#create-the-environment)
+  - [Configure SSH access](#configure-ssh-access)
+  - [Add projects](#add-projects)
+  - [Optional setup](#optional-setup)
+    - [Commit signing](#commit-signing)
+    - [Develocity access key](#develocity-access-key)
+    - [Other agents](#other-agents)
+- [Daily use](#daily-use)
+  - [Connect from a terminal](#connect-from-a-terminal)
+  - [AI workspace application](#ai-workspace-application)
+  - [IntelliJ IDEA](#intellij-idea)
+  - [Access changes from host checkout](#access-changes-from-host-checkout)
+- [Manage the environment](#manage-the-environment)
+  - [Dashboard and status](#dashboard-and-status)
+  - [Start, stop, and remove the sandbox](#start-stop-and-remove-the-sandbox)
   - [Recreate with different resources or configuration](#recreate-with-different-resources-or-configuration)
-- [Dashboard and status](#dashboard-and-status)
-- [Set up projects](#set-up-projects)
-- [Connect to the sandbox](#connect-to-the-sandbox)
-  - [Connect over SSH or with sbx](#connect-over-ssh-or-with-sbx)
-  - [Connect from an AI workspace application](#connect-from-an-ai-workspace-application)
-  - [Connect from IntelliJ IDEA](#connect-from-intellij-idea)
-- [Move changes to a host checkout](#move-changes-to-a-host-checkout)
-- [Commit signing](#commit-signing)
-- [Secrets](#secrets)
-  - [Develocity access key](#develocity-access-key)
-- [Use with other agents](#use-with-other-agents)
-- [Security boundary](#security-boundary)
+- [Reference](#reference)
+  - [Secrets](#secrets)
+  - [Security boundary](#security-boundary)
 
 ## Overview
 
@@ -87,7 +92,15 @@ The arrangement follows from four decisions:
   The host contributes credentials over short-lived secrets and an editor over
   SSH, and receives finished work by fetching from the sandbox as a Git remote.
 
-## Prerequisites
+## Setup
+
+Complete the first four sections in order for a new developer machine and
+sandbox. Each section states when it normally needs to be repeated. The
+remaining integrations are optional; configure only the ones you use.
+
+### Prepare the host
+
+**Frequency:** Once per developer machine; authentication may need renewal when a session expires.
 
 - Docker SBX 0.39.0 or newer;
 - GitHub CLI (`gh`) authenticated on the host;
@@ -100,31 +113,28 @@ Verify the tools and authenticate:
 sbx version
 sbx login
 gh auth status
-sbx setup ssh
 ```
 
 Use `gh auth login` if `gh auth status` reports that no account is active.
 
-## Create the environment
+### Create the environment
 
-Clone this configuration repository, enter it, and create the declared
-sandbox:
+**Frequency:** Once per sandbox. Repeat only when recreating the environment.
+
+Clone this configuration repository, enter it, and create the declared sandbox
+with a larger root filesystem for projects and the shared Gradle cache:
 
 ```bash
 git clone TEAM_CONFIGURATION_REPOSITORY_URL ai-workspace
 cd ai-workspace
-sbx env create .
+DOCKER_SANDBOXES_ROOT_SIZE=90g sbx env create .
 ```
 
 The sandbox root filesystem defaults to 20 GB, which a shared Gradle cache, the
-IDE backend, and a few project clones exhaust quickly. Disk sizes cannot
-yet be declared in `.sbxenv.yaml`
+IDE backend, and a few project clones exhaust quickly. Disk sizes cannot yet be
+declared in `.sbxenv.yaml`
 ([sbx#465](https://github.com/docker/sbx-releases/issues/465)), so set the size
-on the creation command instead:
-
-```bash
-DOCKER_SANDBOXES_ROOT_SIZE=90g sbx env create .
-```
+on the creation command instead.
 
 `DOCKER_SANDBOXES_DOCKER_SIZE` and `DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE`
 size `/var/lib/docker` and the cloned workspace the same way. All three are
@@ -142,7 +152,329 @@ from Ubuntu's `universe` component, which the base image enables by default.
 Later starts retain installed packages, private repositories, Gradle caches,
 and toolchains.
 
-## Lifecycle
+### Configure SSH access
+
+**Frequency:** Once per developer machine after installing or upgrading Docker SBX.
+
+Docker exposes the sandbox as an OpenSSH-compatible target, so one environment
+is reachable from a terminal, from an editor, and from a full IDE. Run the SSH
+setup once on the host and verify the connection before configuring any
+application:
+
+```bash
+sbx setup ssh
+ssh gradle-ai-workspace.sbx
+```
+
+Use these connection values wherever an application asks for them:
+
+| Setting | Value |
+| --- | --- |
+| SSH host | `gradle-ai-workspace.sbx` |
+| Project folder | `/home/agent/projects/PROJECT_A` |
+| Authentication | Host OpenSSH configuration created by `sbx setup ssh` |
+
+Enter the hostname manually when an application's SSH picker does not list it.
+Docker registers a wildcard `*.sbx` host in `~/.ssh/config`, so individual
+sandbox names might not appear in host pickers. Do not replace the hostname
+with `localhost`, provide a normal SSH key, or use the host macOS username.
+The Docker-managed `ProxyCommand` selects the sandbox and supplies its default
+user without an SSH server listening on port 22.
+
+See Docker's [editor and app integration guide](https://docs.docker.com/ai/sandboxes/integrations/)
+for how the `.sbx` SSH transport works. Docker documents VS Code, Cursor, and
+several other clients there; JetBrains IDEs are not listed but connect over the
+same transport.
+
+### Add projects
+
+**Frequency:** Once per repository in each sandbox.
+
+Connect once and clone as many repositories as needed:
+
+```bash
+ssh gradle-ai-workspace.sbx
+
+mkdir -p /home/agent/projects
+gh repo clone OWNER/PROJECT_A /home/agent/projects/PROJECT_A
+gh repo clone OWNER/PROJECT_B /home/agent/projects/PROJECT_B
+```
+
+Cloning uses the `github` secret resolved from the host, so no credentials are
+entered inside the sandbox.
+
+Every project and agent in this sandbox shares `/home/agent/.gradle`. Gradle's
+dependency cache, wrapper distributions, downloaded toolchains, and local build
+cache therefore remain available across projects and sandbox restarts.
+
+This is a one-time step per repository. The clones survive restarts and are
+deleted with the environment, so push or fetch anything that must outlive it.
+
+### Optional setup
+
+These integrations are independent. Skip any that are not relevant to your
+workflow.
+
+#### Commit signing
+
+**Frequency:** Register each key once per GitHub account; configure Git once per sandbox.
+
+Docker forwards the host SSH agent into the sandbox, so Git can sign commits
+without copying a private key into the environment or this repository.
+
+First, on the host, inspect the fingerprint of the intended public key, load
+its private key, and confirm that the same fingerprint appears in the agent:
+
+```bash
+ssh-keygen -lf ~/.ssh/id_ed25519.pub # Show the intended public key's fingerprint.
+ssh-add ~/.ssh/id_ed25519            # Load its private key into the host SSH agent.
+ssh-add -l                           # List fingerprints available through the agent.
+```
+
+Replace `id_ed25519` with the path to the key you intend to use. Register its
+public key with GitHub as a signing key using the CLI:
+
+```bash
+gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "SBX sandbox commit signing" # Add the public key as a GitHub signing key.
+```
+
+Alternatively, in the GitHub UI, open `Profile picture → Settings`, then
+under `Access` select [SSH and GPG keys](https://github.com/settings/keys) →
+`New SSH key`. Select `Signing Key` as the key type, paste the public key, and
+add it.
+
+An SSH key already registered for authentication must be registered a second
+time as a signing key. Registering the key is a one-time, per-user operation;
+the shared setup cannot make that change to a developer's GitHub account.
+
+Next, connect to the sandbox and inspect both the fingerprints and complete
+public keys forwarded by the host agent:
+
+```bash
+ssh gradle-ai-workspace.sbx # Connect to the sandbox.
+ssh-add -l                  # List forwarded key fingerprints.
+ssh-add -L                  # Show the complete forwarded public keys.
+```
+
+Copy the selected public key exactly as shown by `ssh-add -L`, then configure
+Git inside the sandbox. The following public key is only an example; replace it
+with the complete selected public key:
+
+```bash
+git config --global gpg.format ssh                                                # Use SSH signatures.
+git config --global user.signingkey 'key::ssh-ed25519 AAAAC3... developer@example.com' # Select the public signing key.
+git config --global commit.gpgsign true                                           # Sign commits automatically.
+```
+
+Also ensure `git config --global user.email` is an email associated with the
+GitHub account. New commits are now signed automatically.
+
+If `ssh-add -L` inside the sandbox reports no identities, load the key on the
+host and reconnect. GitHub displays `Verified` after a commit signed by the
+registered key is pushed.
+
+#### Develocity access key
+
+**Frequency:** Once per sandbox.
+
+Provision a personal Develocity access key from one Develocity-enabled Gradle
+project inside the sandbox:
+
+```bash
+ssh gradle-ai-workspace.sbx
+cd /home/agent/projects/PROJECT_A
+./gradlew provisionDevelocityAccessKey
+```
+
+If Gradle cannot open a browser, copy the URL printed in the terminal into a
+browser on the host and complete the sign-in there. The key is stored in the
+shared Gradle User Home at:
+
+```text
+/home/agent/.gradle/develocity/keys.properties
+```
+
+This only needs to be done once per sandbox, not once per project. The key is
+available to every project and agent in that sandbox and remains across
+sandbox restarts. It is deleted when the environment is removed. Treat it like
+a password and never commit it or put a literal value in `.sbxenv.yaml`.
+
+The interactive command is the recommended setup for this persistent sandbox.
+For disposable or automated environments, Develocity also supports the
+`DEVELOCITY_ACCESS_KEY` environment variable in
+`develocity.example.com=ACCESS_KEY` form. Resolve that value from a secret
+manager at runtime rather than storing it in this repository.
+
+#### Other agents
+
+**Frequency:** Once per sandbox, unless the agent is added to a setup kit.
+
+Claude is the managed agent, but additional command-line agents can be
+installed inside the persistent sandbox and use the same projects and Gradle
+cache. For example, install and run Codex with:
+
+```bash
+ssh gradle-ai-workspace.sbx
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+
+cd /home/agent/projects/PROJECT_A
+codex login --device-auth
+codex
+```
+
+Device-code authentication is suitable for the sandbox's headless SSH session.
+If it is not enabled for the ChatGPT account or workspace, run `codex login`
+and follow the available sign-in flow. The installation and login state remain
+until the sandbox is removed. Install other agents in the same way, following
+their official Linux installation and authentication instructions.
+
+## Daily use
+
+Use these sections after the environment and projects are configured.
+
+### Connect from a terminal
+
+A plain SSH session is the simplest way in:
+
+```bash
+ssh gradle-ai-workspace.sbx
+```
+
+`sbx` reaches the same sandbox without SSH and starts it if it is stopped:
+
+```bash
+sbx env run .                            # attach the managed Claude session
+sbx exec -it gradle-ai-workspace bash    # open a shell
+sbx exec -u root gradle-ai-workspace apt-get install -y PACKAGE
+```
+
+Packages installed that way survive restarts but are lost when the environment
+is removed. Add anything that must always be present to
+`kits/gradle-tools/spec.yaml` instead.
+
+If no Anthropic API key is configured, run `/login` inside Claude and sign in
+with the team's Claude subscription. To use an API key instead, store it on the
+host before creating the environment:
+
+```bash
+sbx secret set anthropic
+```
+
+### AI workspace application
+
+For daily work, open the saved `gradle-ai-workspace.sbx` SSH target and select
+the project folder under `/home/agent/projects`. Connecting starts the sandbox
+if it is stopped. Editing, terminals, agents, Git operations, and builds then
+run remotely while the application provides its local interface.
+
+**First-time setup:** Once per application and project connection.
+
+Any editor or AI workspace application that supports remote development over
+SSH can use this environment. For example, in
+[Orca](https://www.onorca.dev/docs/ssh):
+
+1. Open **Settings → SSH** and click **Add Target**.
+2. Enter `gradle-ai-workspace.sbx` as the host. Leave the identity file unset
+   and let Orca resolve the effective settings from `~/.ssh/config`.
+3. Click **Test**, verify the host key if prompted, and then click **Save**.
+4. Add an existing remote repository or folder using that SSH target and select
+   `/home/agent/projects/PROJECT_A`.
+5. Open the remote project and start Claude, Codex, or another installed agent.
+
+On its first connection, Orca installs a relay under `/home/agent/.orca-remote`.
+The relay can compile the native `node-pty` module on Linux; this environment's
+kit installs `build-essential` and Python 3 for that purpose. The initial
+connection can therefore take longer than later connections.
+
+### IntelliJ IDEA
+
+For daily work, open **Remote Development**, select the saved SSH connection
+and project, and reconnect. Use the remote IDE normally for editing, navigation,
+and Gradle tasks. Its built-in terminal also runs inside the sandbox and can
+start Claude, Codex, or another installed agent.
+
+**First-time setup:** Once per project connection.
+
+1. Choose **File → Remote Development**, or launch **JetBrains Gateway**
+   directly. Select the **SSH** provider and click **New Connection**.
+2. In the SSH configuration dialog, enable **Parse config file ~/.ssh/config**
+   and enter `gradle-ai-workspace.sbx` as the host. Leave the port, user name,
+   and key unset; the parsed configuration supplies them.
+3. Check the connection and continue.
+4. Select an IntelliJ IDEA version for the backend, set the project directory
+   to `/home/agent/projects/PROJECT_A`, and start the connection.
+
+Enabling **Parse config file ~/.ssh/config** is what makes this work. JetBrains
+remote development supports the `ProxyCommand` directive that Docker's `*.sbx`
+entry relies on, but not `ProxyJump`. Typing a host, port, and user name into
+the dialog by hand instead bypasses that entry and fails to connect. Existing
+configurations can be edited later under
+**Settings → Tools → SSH Configurations**.
+
+The first connection downloads the IDE backend into
+`/home/agent/.cache/JetBrains/RemoteDev/dist` and therefore takes noticeably
+longer than later ones. That directory is the single largest consumer of the
+root filesystem — it reached 5.7 GB here, because each backend version is kept
+alongside the previous ones. Delete the versions no longer in use when disk
+runs short. The backend survives sandbox restarts and is removed
+with the environment. It is self-contained on this glibc-based image and needs
+no extra packages; the kit's `curl` covers its download requirement.
+
+Point **Gradle JVM** at one of the installed JDKs under `/usr/lib/jvm` in
+**Settings → Build, Execution, Deployment → Build Tools → Gradle**. Toolchain
+resolution then uses the same shared `/home/agent/.gradle` as every other
+project and agent in the sandbox.
+
+### Access changes from host checkout
+
+Commit changes inside the sandbox first. Any sandbox repository can then be
+used as an SSH Git remote from its corresponding host checkout:
+
+```bash
+cd /path/to/host/PROJECT_A
+git remote add sbx-gradle-ai-workspace \
+  gradle-ai-workspace.sbx:/home/agent/projects/PROJECT_A
+git fetch sbx-gradle-ai-workspace
+
+git log sbx-gradle-ai-workspace/ai/my-change
+git diff main..sbx-gradle-ai-workspace/ai/my-change
+git switch --track -c ai/my-change sbx-gradle-ai-workspace/ai/my-change
+```
+
+Alternatively, push a sandbox branch to its normal `origin` and fetch it from
+the host.
+
+## Manage the environment
+
+Use these procedures to inspect, stop, remove, or recreate the persistent
+sandbox.
+
+### Dashboard and status
+
+Docker Sandboxes includes an interactive dashboard. Run it on the host from any
+directory:
+
+```bash
+sbx
+```
+
+Running `sbx` with no command opens interactive mode; `sbx tui` opens the same
+dashboard explicitly. It covers every sandbox on the host, not only this
+environment's `gradle-ai-workspace`.
+
+The same information is available non-interactively, which is easier to script
+and to paste into an issue:
+
+```bash
+sbx ls           # agent, status, published ports, and workspace
+sbx ls --json    # machine-readable output
+sbx ls --quiet   # sandbox names only
+```
+
+If a command reports that you are not authenticated, run `sbx login`. Run
+`sbx diagnose` when connections or the dashboard misbehave.
+
+### Start, stop, and remove the sandbox
 
 Stop the sandbox without losing its state:
 
@@ -283,245 +615,12 @@ good. It can then be removed with:
 sbx template rm gradle-ai-workspace-migration:2026-09-01
 ```
 
-## Dashboard and status
+## Reference
 
-Docker Sandboxes includes an interactive dashboard. Run it on the host from any
-directory:
+Configuration and trust-boundary details that are useful when changing or
+auditing the environment.
 
-```bash
-sbx
-```
-
-Running `sbx` with no command opens interactive mode; `sbx tui` opens the same
-dashboard explicitly. It covers every sandbox on the host, not only this
-environment's `gradle-ai-workspace`.
-
-The same information is available non-interactively, which is easier to script
-and to paste into an issue:
-
-```bash
-sbx ls           # agent, status, published ports, and workspace
-sbx ls --json    # machine-readable output
-sbx ls --quiet   # sandbox names only
-```
-
-If a command reports that you are not authenticated, run `sbx login`. Run
-`sbx diagnose` when connections or the dashboard misbehave.
-
-## Set up projects
-
-Connect once and clone as many repositories as needed:
-
-```bash
-ssh gradle-ai-workspace.sbx
-
-mkdir -p /home/agent/projects
-gh repo clone OWNER/PROJECT_A /home/agent/projects/PROJECT_A
-gh repo clone OWNER/PROJECT_B /home/agent/projects/PROJECT_B
-```
-
-Cloning uses the `github` secret resolved from the host, so no credentials are
-entered inside the sandbox.
-
-Every project and agent in this sandbox shares `/home/agent/.gradle`. Gradle's
-dependency cache, wrapper distributions, downloaded toolchains, and local build
-cache therefore remain available across projects and sandbox restarts.
-
-This is a one-time step per repository. The clones survive restarts and are
-deleted with the environment, so push or fetch anything that must outlive it.
-
-## Connect to the sandbox
-
-Docker exposes the sandbox as an OpenSSH-compatible target, so one environment
-is reachable from a terminal, from an editor, and from a full IDE. Run the SSH
-setup once on the host and verify the connection before configuring any
-application:
-
-```bash
-sbx setup ssh
-ssh gradle-ai-workspace.sbx
-```
-
-Use these connection values wherever an application asks for them:
-
-| Setting | Value |
-| --- | --- |
-| SSH host | `gradle-ai-workspace.sbx` |
-| Project folder | `/home/agent/projects/PROJECT_A` |
-| Authentication | Host OpenSSH configuration created by `sbx setup ssh` |
-
-Enter the hostname manually when an application's SSH picker does not list it.
-Docker registers a wildcard `*.sbx` host in `~/.ssh/config`, so individual
-sandbox names might not appear in host pickers. Do not replace the hostname
-with `localhost`, provide a normal SSH key, or use the host macOS username.
-The Docker-managed `ProxyCommand` selects the sandbox and supplies its default
-user without an SSH server listening on port 22.
-
-See Docker's [editor and app integration guide](https://docs.docker.com/ai/sandboxes/integrations/)
-for how the `.sbx` SSH transport works. Docker documents VS Code, Cursor, and
-several other clients there; JetBrains IDEs are not listed but connect over the
-same transport.
-
-### Connect over SSH or with sbx
-
-A plain SSH session is the simplest way in:
-
-```bash
-ssh gradle-ai-workspace.sbx
-```
-
-`sbx` reaches the same sandbox without SSH and starts it if it is stopped:
-
-```bash
-sbx env run .                            # attach the managed Claude session
-sbx exec -it gradle-ai-workspace bash    # open a shell
-sbx exec -u root gradle-ai-workspace apt-get install -y PACKAGE
-```
-
-Packages installed that way survive restarts but are lost when the environment
-is removed. Add anything that must always be present to
-`kits/gradle-tools/spec.yaml` instead.
-
-If no Anthropic API key is configured, run `/login` inside Claude and sign in
-with the team's Claude subscription. To use an API key instead, store it on the
-host before creating the environment:
-
-```bash
-sbx secret set anthropic
-```
-
-### Connect from an AI workspace application
-
-Any editor or AI workspace application that supports remote development over
-SSH can use this environment. For example, in
-[Orca](https://www.onorca.dev/docs/ssh):
-
-1. Open **Settings → SSH** and click **Add Target**.
-2. Enter `gradle-ai-workspace.sbx` as the host. Leave the identity file unset
-   and let Orca resolve the effective settings from `~/.ssh/config`.
-3. Click **Test**, verify the host key if prompted, and then click **Save**.
-4. Add an existing remote repository or folder using that SSH target and select
-   `/home/agent/projects/PROJECT_A`.
-5. Start Claude, Codex, or another installed agent. Its process, terminals,
-   Git worktrees, and builds run inside the sandbox while Orca provides the
-   local editor and diff interface.
-
-On its first connection, Orca installs a relay under `/home/agent/.orca-remote`.
-The relay can compile the native `node-pty` module on Linux; this environment's
-kit installs `build-essential` and Python 3 for that purpose. The initial
-connection can therefore take longer than later connections.
-
-### Connect from IntelliJ IDEA
-
-1. Choose **File → Remote Development**, or launch **JetBrains Gateway**
-   directly. Select the **SSH** provider and click **New Connection**.
-2. In the SSH configuration dialog, enable **Parse config file ~/.ssh/config**
-   and enter `gradle-ai-workspace.sbx` as the host. Leave the port, user name,
-   and key unset; the parsed configuration supplies them.
-3. Check the connection and continue.
-4. Select an IntelliJ IDEA version for the backend, set the project directory
-   to `/home/agent/projects/PROJECT_A`, and start the connection.
-5. Open the built-in terminal in the remote IDE and start Claude, Codex, or
-   another installed agent. The agent, its terminals, and Gradle run inside the
-   sandbox while the local thin client provides the editor.
-
-Enabling **Parse config file ~/.ssh/config** is what makes this work. JetBrains
-remote development supports the `ProxyCommand` directive that Docker's `*.sbx`
-entry relies on, but not `ProxyJump`. Typing a host, port, and user name into
-the dialog by hand instead bypasses that entry and fails to connect. Existing
-configurations can be edited later under
-**Settings → Tools → SSH Configurations**.
-
-The first connection downloads the IDE backend into
-`/home/agent/.cache/JetBrains/RemoteDev/dist` and therefore takes noticeably
-longer than later ones. That directory is the single largest consumer of the
-root filesystem — it reached 5.7 GB here, because each backend version is kept
-alongside the previous ones. Delete the versions no longer in use when disk
-runs short. The backend survives sandbox restarts and is removed
-with the environment. It is self-contained on this glibc-based image and needs
-no extra packages; the kit's `curl` covers its download requirement.
-
-Point **Gradle JVM** at one of the installed JDKs under `/usr/lib/jvm` in
-**Settings → Build, Execution, Deployment → Build Tools → Gradle**. Toolchain
-resolution then uses the same shared `/home/agent/.gradle` as every other
-project and agent in the sandbox.
-
-## Move changes to a host checkout
-
-Commit changes inside the sandbox first. Any sandbox repository can then be
-used as an SSH Git remote from its corresponding host checkout:
-
-```bash
-cd /path/to/host/PROJECT_A
-git remote add sbx-gradle-ai-workspace \
-  gradle-ai-workspace.sbx:/home/agent/projects/PROJECT_A
-git fetch sbx-gradle-ai-workspace
-
-git log sbx-gradle-ai-workspace/ai/my-change
-git diff main..sbx-gradle-ai-workspace/ai/my-change
-git switch --track -c ai/my-change sbx-gradle-ai-workspace/ai/my-change
-```
-
-Alternatively, push a sandbox branch to its normal `origin` and fetch it from
-the host.
-
-## Commit signing
-
-Docker forwards the host SSH agent into the sandbox, so Git can sign commits
-without copying a private key into the environment or this repository.
-
-First, on the host, inspect the fingerprint of the intended public key, load
-its private key, and confirm that the same fingerprint appears in the agent:
-
-```bash
-ssh-keygen -lf ~/.ssh/id_ed25519.pub # Show the intended public key's fingerprint.
-ssh-add ~/.ssh/id_ed25519            # Load its private key into the host SSH agent.
-ssh-add -l                           # List fingerprints available through the agent.
-```
-
-Replace `id_ed25519` with the path to the key you intend to use. Register its
-public key with GitHub as a signing key using the CLI:
-
-```bash
-gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "SBX sandbox commit signing" # Add the public key as a GitHub signing key.
-```
-
-Alternatively, in the GitHub UI, open `Profile picture → Settings`, then
-under `Access` select [SSH and GPG keys](https://github.com/settings/keys) →
-`New SSH key`. Select `Signing Key` as the key type, paste the public key, and
-add it.
-
-An SSH key already registered for authentication must be registered a second
-time as a signing key. Registering the key is a one-time, per-user operation;
-the shared setup cannot make that change to a developer's GitHub account.
-
-Next, connect to the sandbox and inspect both the fingerprints and complete
-public keys forwarded by the host agent:
-
-```bash
-ssh gradle-ai-workspace.sbx # Connect to the sandbox.
-ssh-add -l                  # List forwarded key fingerprints.
-ssh-add -L                  # Show the complete forwarded public keys.
-```
-
-Copy the selected public key exactly as shown by `ssh-add -L`, then configure
-Git inside the sandbox. The following public key is only an example; replace it
-with the complete selected public key:
-
-```bash
-git config --global gpg.format ssh                                                # Use SSH signatures.
-git config --global user.signingkey 'key::ssh-ed25519 AAAAC3... developer@example.com' # Select the public signing key.
-git config --global commit.gpgsign true                                           # Sign commits automatically.
-```
-
-Also ensure `git config --global user.email` is an email associated with the
-GitHub account. New commits are now signed automatically.
-
-If `ssh-add -L` inside the sandbox reports no identities, load the key on the
-host and reconnect. GitHub displays `Verified` after a commit signed by the
-registered key is pushed.
-
-## Secrets
+### Secrets
 
 `.sbxenv.yaml` declares the GitHub secret using:
 
@@ -535,58 +634,7 @@ The command executes on each developer's host. The token itself is not stored
 in this repository or copied into the sandbox. Do not replace it with a literal
 token value.
 
-### Develocity access key
-
-Provision a personal Develocity access key from one Develocity-enabled Gradle
-project inside the sandbox:
-
-```bash
-ssh gradle-ai-workspace.sbx
-cd /home/agent/projects/PROJECT_A
-./gradlew provisionDevelocityAccessKey
-```
-
-If Gradle cannot open a browser, copy the URL printed in the terminal into a
-browser on the host and complete the sign-in there. The key is stored in the
-shared Gradle User Home at:
-
-```text
-/home/agent/.gradle/develocity/keys.properties
-```
-
-This only needs to be done once per sandbox, not once per project. The key is
-available to every project and agent in that sandbox and remains across
-sandbox restarts. It is deleted when the environment is removed. Treat it like
-a password and never commit it or put a literal value in `.sbxenv.yaml`.
-
-The interactive command is the recommended setup for this persistent sandbox.
-For disposable or automated environments, Develocity also supports the
-`DEVELOCITY_ACCESS_KEY` environment variable in
-`develocity.example.com=ACCESS_KEY` form. Resolve that value from a secret
-manager at runtime rather than storing it in this repository.
-
-## Use with other agents
-
-Claude is the managed agent, but additional command-line agents can be
-installed inside the persistent sandbox and use the same projects and Gradle
-cache. For example, install and run Codex with:
-
-```bash
-ssh gradle-ai-workspace.sbx
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
-
-cd /home/agent/projects/PROJECT_A
-codex login --device-auth
-codex
-```
-
-Device-code authentication is suitable for the sandbox's headless SSH session.
-If it is not enabled for the ChatGPT account or workspace, run `codex login`
-and follow the available sign-in flow. The installation and login state remain
-until the sandbox is removed. Install other agents in the same way, following
-their official Linux installation and authentication instructions.
-
-## Security boundary
+### Security boundary
 
 Keep `workspace.clone: true`. Changing it to direct mode would let agents write
 to this host checkout, including future environment configuration.

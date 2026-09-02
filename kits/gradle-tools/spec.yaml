@@ -2,14 +2,14 @@ schemaVersion: "2"
 kind: mixin
 name: gradle-tools
 displayName: Gradle build tools
-description: Installs Java 8, Java 17, Java 25, and native build tools for Gradle development.
+description: Installs Java 8, Java 17, Java 25, native build tools, and Vim for Gradle development.
 
 setup:
   install:
     - command: >-
         find /var/lib/apt/lists -mindepth 1 -delete &&
         apt-get update &&
-        apt-get install -y build-essential curl python3
+        apt-get install -y build-essential curl python3 vim
         openjdk-8-jdk-headless openjdk-17-jdk-headless openjdk-25-jdk-headless &&
         find /var/lib/apt/lists -mindepth 1 -delete
-      description: Install native build tools, curl, Python 3, Java 8, Java 17, and Java 25
+      description: Install native build tools, curl, Python 3, Vim, Java 8, Java 17, and Java 25

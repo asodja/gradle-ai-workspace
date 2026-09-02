@@ -8,7 +8,7 @@ agents against many Gradle projects. It creates one persistent sandbox named
 - one sandbox-native Gradle cache at `/home/agent/.gradle`;
 - 8 CPUs and 32 GB of memory;
 - Claude Code as the Docker-managed agent;
-- Java 8, Java 17, Java 25, and native build tools installed at creation;
+- Java 8, Java 17, Java 25, native build tools, and Vim installed at creation;
 - GitHub credentials resolved from each developer's host `gh` login;
 - SSH access for remote-development clients.
 
@@ -53,7 +53,7 @@ keeps only this configuration repository, an SSH client, and the editor.
   ┌───────────────────────────────────────────────────────────┐
   │  ai-workspace/  — this repository, configuration only     │
   │    .sbxenv.yaml           sandbox, resources, secrets     │
-  │    kits/gradle-tools/     JDKs and native build tools     │
+  │    kits/gradle-tools/     JDKs, native build tools, Vim   │
   │                                                           │
   │  gh auth token  ─────────────────►  github secret         │
   │  editor / AI workspace app  ─────►  ssh *.sbx             │
@@ -71,7 +71,7 @@ keeps only this configuration repository, an SSH client, and the editor.
   │    Develocity access key                                  │
   │                                                           │
   │  agents   Claude Code (Docker-managed), Codex, others     │
-  │  tools    Java 8/17/25, build-essential, Python 3         │
+  │  tools    Java 8/17/25, build-essential, Python 3, Vim    │
   │                                                           │
   │  /run/sandbox/source  — read-only copy of this repository │
   └───────────────────────────────────────────────────────────┘
@@ -143,7 +143,7 @@ on the creation command instead.
 `DOCKER_SANDBOXES_ROOT_SIZE=90g` sizes the root filesystem containing
 `/home/agent/.gradle`, `/home/agent/projects`, installed packages, and the IDE
 backend. `DOCKER_SANDBOXES_DOCKER_SIZE=10g` sizes `/var/lib/docker` for the
-private Docker daemon's images, containers, volumes, and build cache.
+private Docker daemon's images, containers, volumes, and Docker build cache.
 `DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g` sizes the separate private clone of
 this small configuration repository. It does not contain the Gradle cache or
 development projects. All disk capacities are fixed at creation; see Docker's
@@ -153,12 +153,12 @@ development projects. All disk capacities are fixed at creation; see Docker's
 repository. It does not contain the development projects. Those are cloned
 separately under `/home/agent/projects` inside `gradle-ai-workspace`.
 
-The first creation installs `build-essential`, Python 3, Java 8, Java 17, and
-Java 25 on top of Docker's Ubuntu-based sandbox image. Gradle detects all three
-JDK installations under `/usr/lib/jvm` for toolchain selection. Java 8 comes
-from Ubuntu's `universe` component, which the base image enables by default.
-Later starts retain installed packages, private repositories, Gradle caches,
-and toolchains.
+The first creation installs `build-essential`, `curl`, Python 3, Vim, Java 8,
+Java 17, and Java 25 on top of Docker's Ubuntu-based sandbox image. Gradle
+detects all three JDK installations under `/usr/lib/jvm` for toolchain
+selection. Java 8 comes from Ubuntu's `universe` component, which the base
+image enables by default. Later starts retain installed packages, private
+repositories, Gradle caches, and toolchains.
 
 ### Configure SSH access
 
@@ -624,7 +624,7 @@ The disk variables control different data:
 - `DOCKER_SANDBOXES_ROOT_SIZE` contains `/home/agent/.gradle`,
   `/home/agent/projects`, installed packages, and most sandbox state;
 - `DOCKER_SANDBOXES_DOCKER_SIZE` contains the private Docker daemon's images,
-  containers, volumes, and build cache under `/var/lib/docker`;
+  containers, volumes, and Docker build cache under `/var/lib/docker`;
 - `DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE` contains the private clone of this
   control repository because `workspace.clone` is enabled.
 

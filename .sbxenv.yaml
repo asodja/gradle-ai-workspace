@@ -1,6 +1,6 @@
 schemaVersion: "1"
 
-name: gradle-ai-workspace
+name: show-and-tell-workspace-test
 agent: claude
 
 # Gradle daemons plus parallel workers exhausted the previous 16g limit and were

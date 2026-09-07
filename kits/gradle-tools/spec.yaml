@@ -2,7 +2,7 @@ schemaVersion: "2"
 kind: mixin
 name: gradle-tools
 displayName: Gradle build tools
-description: Installs Java 8, Java 17, Java 25, native build tools, and Vim for Gradle development.
+description: Installs Gradle development tools and a Claude Code --yolo convenience flag.
 
 setup:
   install:
@@ -13,3 +13,12 @@ setup:
         openjdk-8-jdk-headless openjdk-17-jdk-headless openjdk-25-jdk-headless &&
         find /var/lib/apt/lists -mindepth 1 -delete
       description: Install native build tools, curl, Python 3, Vim, Java 8, Java 17, and Java 25
+    - command: |
+        set -eu
+        hook='. /home/agent/.config/scripts/claude-yolo.sh'
+        test -r /home/agent/.config/scripts/claude-yolo.sh
+        touch /etc/sandbox-persistent.sh
+        if ! grep -Fqx "$hook" /etc/sandbox-persistent.sh; then
+          printf '\n%s\n' "$hook" >> /etc/sandbox-persistent.sh
+        fi
+      description: Add the Claude Code --yolo convenience flag to sandbox shells

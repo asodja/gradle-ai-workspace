@@ -348,6 +348,20 @@ A plain SSH session is the simplest way in:
 ssh gradle-ai-workspace.sbx
 ```
 
+Then start a Claude session with:
+
+```bash
+claude --yolo
+```
+
+> [!NOTE]
+> The setup kit adds `--yolo` as a convenience alias for Claude Code's
+> `--dangerously-skip-permissions` mode. It must be the first argument.
+> Arguments placed after `--yolo` are passed through, so commands such as
+> `claude --yolo --model opus` also work. This mode disables Claude Code's
+> permission prompts; the surrounding SBX filesystem and network boundaries
+> still apply.
+
 `sbx` reaches the same sandbox without SSH and starts it if it is stopped:
 
 ```bash

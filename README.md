@@ -58,7 +58,7 @@ keeps only this configuration repository, an SSH client, and the editor.
   │  gh auth token  ─────────────────►  github secret         │
   │  editor / AI workspace app  ─────►  ssh *.sbx             │
   └───────────────┬──────────────────────────────┬────────────┘
-                  │ sbx env create .             │ SSH
+                  │ sbx env create .sbxenv.yaml   │ SSH
                   ▼                              ▼
   SANDBOX gradle-ai-workspace — 8 CPUs, 32 GB, persistent
   ┌───────────────────────────────────────────────────────────┐
@@ -102,7 +102,7 @@ remaining integrations are optional; configure only the ones you use.
 
 **Frequency:** Once per developer machine; authentication may need renewal when a session expires.
 
-- Docker SBX 0.39.0 or newer;
+- Docker SBX 0.42.0 or newer;
 - GitHub CLI (`gh`) authenticated on the host;
 - OpenSSH on the host;
 - a Claude subscription or Anthropic API key.
@@ -131,7 +131,7 @@ cd ai-workspace
 DOCKER_SANDBOXES_ROOT_SIZE=90g \
 DOCKER_SANDBOXES_DOCKER_SIZE=10g \
 DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g \
-  sbx env create .
+  sbx env create .sbxenv.yaml
 ```
 
 The sandbox root filesystem defaults to 20 GB, which a shared Gradle cache, the
@@ -365,7 +365,7 @@ claude --yolo
 `sbx` reaches the same sandbox without SSH and starts it if it is stopped:
 
 ```bash
-sbx env run .                            # attach the managed Claude session
+sbx env run .sbxenv.yaml                 # attach the managed Claude session
 sbx exec -it gradle-ai-workspace bash    # open a shell
 sbx exec -u root gradle-ai-workspace apt-get install -y PACKAGE
 ```
@@ -504,11 +504,11 @@ Stop the sandbox without losing its state:
 sbx stop gradle-ai-workspace
 ```
 
-An SSH connection or `sbx env run .` starts it again. Before removing the
+An SSH connection or `sbx env run .sbxenv.yaml` starts it again. Before removing the
 sandbox, commit and fetch or push every change that must be retained:
 
 ```bash
-sbx env rm .
+sbx env rm .sbxenv.yaml
 ```
 
 Removing the environment deletes all private repositories, unpushed work,
@@ -518,16 +518,80 @@ secrets.
 Changes to kits, workspaces, secrets, or sandbox resource options require
 recreating the environment. Preserve project work before doing so. Memory,
 CPUs, and disk sizes are fixed when the sandbox is created; nothing resizes
-them in place, so raising one means recreating the sandbox. The procedure below
-preserves its name and root-filesystem data across that recreation.
+them in place, so raising one means recreating the sandbox.
 
 ### Recreate with different resources or configuration
 
 To change creation-time properties such as memory, CPU, or disk size, recreate
 the sandbox because SBX cannot change them in place. SBX also cannot rename a
-sandbox. To keep the stable name `gradle-ai-workspace`, save the old root
-filesystem as a local template, remove the old environment, and recreate it
-under the same name from that template.
+sandbox. Keeping the stable name `gradle-ai-workspace` therefore requires
+backing up the required data, removing the old environment, and recreating it
+under the same name.
+
+Choose one of these migration methods:
+
+- **Host project backup:** copies `/home/agent/projects` to the host, recreates
+  a clean environment, and copies the projects back. This is usually faster
+  and more reliable when caches can be downloaded again.
+- **Local template:** preserves the writable root filesystem, including caches
+  and installed tools, but large snapshots can be slow or fail.
+
+#### Recreate from a host project backup
+
+As an alternative to a snapshot, copy the project checkouts to the host before
+removing the sandbox. From the root of this configuration repository, choose a
+timestamped backup directory and copy `/home/agent/projects` into it:
+
+```bash
+BACKUP_DIR="$HOME/.sbx-project-backups/gradle-ai-workspace-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$BACKUP_DIR"
+sbx cp gradle-ai-workspace:/home/agent/projects "$BACKUP_DIR"
+```
+
+This copies complete working trees, including `.git` directories, untracked
+files, and uncommitted changes. Verify that the backup exists and looks
+complete before removing the sandbox:
+
+```bash
+test -d "$BACKUP_DIR/projects"
+du -sh "$BACKUP_DIR/projects"
+find "$BACKUP_DIR/projects" -mindepth 1 -maxdepth 1 -type d
+```
+
+Then stop and remove the old environment, and recreate it with the desired
+configuration and disk sizes:
+
+```bash
+sbx stop gradle-ai-workspace
+sbx env rm .sbxenv.yaml
+DOCKER_SANDBOXES_ROOT_SIZE=90g \
+DOCKER_SANDBOXES_DOCKER_SIZE=10g \
+DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g \
+  sbx env create .sbxenv.yaml
+```
+
+After the replacement is running, restore the projects:
+
+```bash
+sbx cp "$BACKUP_DIR/projects" gradle-ai-workspace:/home/agent/
+```
+
+Check the projects and their Git status inside the replacement before deleting
+the host backup. If environment creation fails, retain the backup, resolve the
+creation problem, and run only the create and restore commands again.
+
+> [!WARNING]
+> This method does not preserve `/home/agent/.gradle`, installed packages that
+> are not in the setup kit, agent configuration, commit-signing configuration,
+> sandbox-local secrets, Docker images, containers, volumes, or Docker build
+> cache. Configure those again after recreation. Keep important Git work on a
+> remote as an additional independent backup.
+
+#### Recreate from a local template
+
+Use a local template when the complete writable root filesystem must survive,
+including `/home/agent/.gradle`, installed packages, downloaded toolchains,
+and other files under `/home/agent`.
 
 > [!WARNING]
 > This procedure has downtime, and the recreated sandbox cannot be tested
@@ -536,6 +600,12 @@ under the same name from that template.
 > saved tag does not appear in `sbx template ls`, stop and do not remove the
 > environment. Never run `sbx reset` during the migration: reset also deletes
 > locally cached templates.
+
+`sbx template save` currently has open reports for commit failures
+([sbx#375](https://github.com/docker/sbx-releases/issues/375)) and snapshot
+inflation from filesystem layering, hardlinks, and sparse files
+([sbx#379](https://github.com/docker/sbx-releases/issues/379)). A large Gradle
+cache can make this method much slower than downloading dependencies again.
 
 > [!TIP]
 > A host-side AI coding agent can carry out this procedure, update the
@@ -607,7 +677,7 @@ main environment file. While `.sbxenv.yaml` still describes the old
 environment, remove it:
 
 ```bash
-sbx env rm .
+sbx env rm .sbxenv.yaml
 ```
 
 Update the permanent CPU, memory, kit, workspace, or other settings in
@@ -621,7 +691,7 @@ sandboxOptions:
   memory: 32g
 ```
 
-SBX 0.39.0 limits a sandbox to 32 GiB of memory; check `sbx create --help`
+SBX 0.42.0 limits a sandbox to 32 GiB of memory; check `sbx create --help`
 after upgrading in case that limit changes. Disk capacities are independent
 and must be supplied when the replacement is created:
 
@@ -630,7 +700,7 @@ and must be supplied when the replacement is created:
 DOCKER_SANDBOXES_ROOT_SIZE=90g \
 DOCKER_SANDBOXES_DOCKER_SIZE=10g \
 DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g \
-  sbx env create . restore.sbxenv.yaml
+  sbx env create .sbxenv.yaml restore.sbxenv.yaml
 ```
 
 The disk variables control different data:

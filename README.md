@@ -574,7 +574,13 @@ After the replacement is running, restore the projects:
 
 ```bash
 sbx cp "$BACKUP_DIR/projects" gradle-ai-workspace:/home/agent/
+sbx exec -u root gradle-ai-workspace \
+  chown -R agent:agent /home/agent/projects
 ```
+
+The ownership correction is required because the copy may preserve the host
+user's numeric UID and GID, which do not identify the `agent` user inside the
+sandbox. Without it, tools such as Orca cannot create new project checkouts.
 
 Check the projects and their Git status inside the replacement before deleting
 the host backup. If environment creation fails, retain the backup, resolve the

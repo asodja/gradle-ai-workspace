@@ -6,10 +6,9 @@ Run host commands from the root of this configuration repository, not from
 `docs/`. These procedures remove and recreate the sandbox; they are not part of
 initial setup or daily use.
 
-The examples use the default name `gradle-ai-workspace`. If you created the
-environment with `--name`, replace that name throughout (including SSH hosts
-and `sbx cp` targets), and pass the same `--name` to every `sbx env` command,
-including creation with `restore.sbxenv.yaml`. See
+The examples use the default name `gradle-ai-workspace`. If you chose a
+different name, replace it throughout, including `--name` arguments, SSH hosts,
+and `sbx cp` targets. See
 [Use a different sandbox name](04-manage.md#use-a-different-sandbox-name).
 
 - [Recreate from a host project backup](#recreate-from-a-host-project-backup)
@@ -56,11 +55,11 @@ configuration and disk sizes:
 
 ```bash
 sbx stop gradle-ai-workspace
-sbx env rm .sbxenv.yaml
+sbx env rm --name gradle-ai-workspace .sbxenv.yaml
 DOCKER_SANDBOXES_ROOT_SIZE=90g \
 DOCKER_SANDBOXES_DOCKER_SIZE=10g \
 DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g \
-  sbx env create .sbxenv.yaml
+  sbx env create --name gradle-ai-workspace .sbxenv.yaml
 ```
 
 After the replacement is running, restore the projects:
@@ -176,7 +175,7 @@ main environment file. While `.sbxenv.yaml` still describes the old
 environment, remove it:
 
 ```bash
-sbx env rm .sbxenv.yaml
+sbx env rm --name gradle-ai-workspace .sbxenv.yaml
 ```
 
 Update the permanent CPU, memory, kit, workspace, or other settings in
@@ -201,7 +200,7 @@ are independent and must be supplied when the replacement is created:
 DOCKER_SANDBOXES_ROOT_SIZE=90g \
 DOCKER_SANDBOXES_DOCKER_SIZE=10g \
 DOCKER_SANDBOXES_CLONED_WORKSPACE_SIZE=2g \
-  sbx env create .sbxenv.yaml restore.sbxenv.yaml
+  sbx env create --name gradle-ai-workspace .sbxenv.yaml restore.sbxenv.yaml
 ```
 
 The disk variables control different data:

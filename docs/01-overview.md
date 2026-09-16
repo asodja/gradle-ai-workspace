@@ -21,7 +21,7 @@ keeps only this configuration repository, an SSH client, and the editor.
   │  gh auth token  ─────────────────►  github secret         │
   │  editor / AI workspace app  ─────►  ssh *.sbx             │
   └───────────────┬──────────────────────────────┬────────────┘
-                  │ sbx env create .sbxenv.yaml   │ SSH
+                  │ Create environment           │ SSH
                   ▼                              ▼
   SANDBOX gradle-ai-workspace — 8 CPUs, 32 GB, persistent
   ┌───────────────────────────────────────────────────────────┐

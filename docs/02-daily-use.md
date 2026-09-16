@@ -39,15 +39,20 @@ claude --yolo
 You can also connect without SSH. On the host:
 
 ```bash
-sbx env run .sbxenv.yaml                # Attach the managed Claude session from this repository.
-sbx exec -it gradle-ai-workspace bash   # Open a shell from any directory.
+sbx env run --name gradle-ai-workspace .sbxenv.yaml  # Attach the managed Claude session from this repository.
+sbx exec -it gradle-ai-workspace bash               # Open a shell from any directory.
 ```
 
 ### Claude authentication
 
-For subscription authentication, run `/login` inside Claude when prompted.
-For API-key authentication, store your key on the host before creating the
-environment:
+**Claude subscription:** Run this inside Claude and complete the sign-in:
+
+```text
+/login
+```
+
+**Anthropic API key:** If you use an API key instead, store it on the host
+before creating the environment:
 
 ```bash
 sbx secret set anthropic

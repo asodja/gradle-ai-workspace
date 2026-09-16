@@ -45,11 +45,12 @@ Stop the sandbox without losing its state:
 sbx stop gradle-ai-workspace
 ```
 
-An SSH connection or `sbx env run .sbxenv.yaml` starts it again. Before removing the
-sandbox, commit and fetch or push every change that must be retained:
+An SSH connection or `sbx env run --name gradle-ai-workspace .sbxenv.yaml`
+starts it again. Before removing the sandbox, commit and fetch or push every
+change that must be retained:
 
 ```bash
-sbx env rm .sbxenv.yaml
+sbx env rm --name gradle-ai-workspace .sbxenv.yaml
 ```
 
 Removing the environment deletes all private repositories, unpushed work,

@@ -62,6 +62,12 @@ selection. Java 8 comes from Ubuntu's `universe` component, which the base
 image enables by default. Later starts retain installed packages, private
 repositories, Gradle caches, and toolchains.
 
+The kit keeps shared communication, Git, and code comment guidance in
+[`kits/gradle-tools/files/home/.config/agents/AGENTS.md`](../kits/gradle-tools/files/home/.config/agents/AGENTS.md).
+During setup, it copies that file to `~/.claude/CLAUDE.md` and
+`~/.codex/AGENTS.md`. Edit the source file to change the guidance for future
+setups. Existing sandboxes need both installed copies updated as well.
+
 Every project and agent in this sandbox shares `/home/agent/.gradle`. Gradle's
 dependency cache, wrapper distributions, downloaded toolchains, and local build
 cache therefore remain available across projects and sandbox restarts.

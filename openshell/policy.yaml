@@ -1,0 +1,114 @@
+# Sandbox policy for gradle-ai-workspace on OpenShell.
+#
+# OpenShell denies every outbound connection that no rule allows, and checks
+# the binary that opens it. Gradle, Kotlin, and toolchain downloads all run
+# inside a JVM, so the Java rules list java executables, not the gradlew
+# script. GitHub and Anthropic access come from the attached providers, which
+# inject credentials only at their own endpoints; the rules here only widen
+# what those binaries may request.
+#
+# When a build needs a host that is missing here, OpenShell logs the denial
+# and the policy advisor drafts a rule:
+#   openshell logs gradle-ai-workspace --since 5m --source sandbox
+#   openshell rule get gradle-ai-workspace --status pending
+#   openshell rule approve gradle-ai-workspace --chunk-id <id>
+
+version: 1
+
+# Filesystem and process settings are fixed when the sandbox starts.
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /bin
+    - /usr
+    - /lib
+    - /etc
+    - /opt
+    - /proc
+    - /sys
+    - /var/log
+    - /dev/urandom
+    - /dev/random
+    - /dev/zero
+  read_write:
+    - /home/agent
+    - /tmp
+    - /var/tmp
+    - /dev/null
+    - /dev/shm
+    - /dev/ptmx
+    - /dev/pts
+
+landlock:
+  compatibility: best_effort
+
+network_policies:
+  gradle_distributions:
+    endpoints:
+      - { host: services.gradle.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: downloads.gradle.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries: &java_binaries
+      - path: /usr/lib/jvm/java-*-openjdk-*/bin/java
+      - path: /home/agent/.gradle/jdks/*/bin/java
+      - path: /home/agent/.jdks/*/bin/java
+
+  maven_repositories:
+    endpoints:
+      - { host: repo.maven.apache.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: repo1.maven.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: plugins.gradle.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: plugins-artifacts.gradle.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: repo.gradle.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: maven.google.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: dl.google.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries: *java_binaries
+
+  # services.gradle.org redirects distribution downloads to GitHub releases,
+  # and Temurin toolchains download from there as well.
+  github_downloads:
+    endpoints:
+      - { host: github.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: objects.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: release-assets.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries: *java_binaries
+
+  # Gradle toolchain auto-provisioning resolves JDKs through Foojay.
+  jdk_toolchains:
+    endpoints:
+      - { host: api.foojay.io, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: api.adoptium.net, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries: *java_binaries
+
+  # Build scan publishing and the remote build cache need POST and PUT.
+  develocity:
+    endpoints:
+      - { host: ge.gradle.org, port: 443, protocol: rest, enforcement: enforce, access: read-write }
+      - { host: scans.gradle.com, port: 443, protocol: rest, enforcement: enforce, access: read-write }
+    binaries: *java_binaries
+
+  # The github provider profile grants clone and fetch. This adds push for
+  # every repository the token can write to. Remove it, or restrict the path
+  # to one repository, for a read-only workspace.
+  github_push:
+    endpoints:
+      - host: github.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: POST, path: "/**/git-receive-pack" }
+    binaries:
+      - path: /usr/bin/git
+
+  # Lets Claude Code reach Anthropic without an API-key provider, so that
+  # `/login` with a Claude subscription can be tried. The OAuth token then
+  # lives inside the sandbox, as it does in the Docker SBX workspace. With the
+  # claude-code provider attached, its rules cover api.anthropic.com as well.
+  claude_code:
+    endpoints:
+      - { host: api.anthropic.com, port: 443, protocol: rest, enforcement: enforce, access: read-write }
+      - { host: platform.claude.com, port: 443, protocol: rest, enforcement: enforce, access: read-write }
+      - { host: console.anthropic.com, port: 443, protocol: rest, enforcement: enforce, access: read-write }
+      - { host: statsig.anthropic.com, port: 443, protocol: rest, enforcement: enforce, access: read-write }
+    binaries:
+      - path: /usr/local/bin/claude

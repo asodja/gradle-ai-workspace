@@ -1,0 +1,13 @@
+# Additions for ~/.config/openshell/gateway.toml on the host.
+#
+# The installer writes a working gateway configuration. Merge only the Docker
+# table below into it. `allow_driver_config` lets create.sh attach the named
+# volumes that keep projects and the Gradle cache across container
+# replacement; resource admission stays on, so only volumes carrying the
+# openshell.ai/sandbox-attachable labels are accepted. Restart the gateway
+# after editing:
+#   macOS:  brew services restart openshell
+#   Linux:  systemctl --user restart openshell-gateway
+
+[openshell.drivers.docker]
+allow_driver_config = true

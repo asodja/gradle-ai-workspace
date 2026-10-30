@@ -1,0 +1,48 @@
+# Copy of NVIDIA/OpenShell providers/github.yaml with binaries matching
+# openshell/Dockerfile (Ubuntu packages: /usr/bin/git, /usr/bin/gh).
+#
+# Credential scope:  GITHUB_TOKEN or GH_TOKEN, sent as a bearer authorization
+#                    header to the endpoints below and nowhere else.
+# Endpoint access:   api.github.com REST and GraphQL read-only; github.com
+#                    clone and fetch. Push comes from the github_push rule in
+#                    openshell/policy.yaml.
+# Import:            openshell provider profile lint   -f openshell/providers/github.yaml
+#                    openshell provider profile import -f openshell/providers/github.yaml
+
+id: github
+display_name: GitHub
+description: GitHub API and Git operations
+category: source_control
+credentials:
+  - name: api_token
+    description: GitHub token
+    env_vars: [GITHUB_TOKEN, GH_TOKEN]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+discovery:
+  credentials: [api_token]
+endpoints:
+  - host: api.github.com
+    port: 443
+    protocol: rest
+    access: read-only
+    enforcement: enforce
+  - host: api.github.com
+    port: 443
+    path: /graphql
+    protocol: graphql
+    access: read-only
+    enforcement: enforce
+  # Git smart HTTP needs POST to git-upload-pack for clone and fetch, which
+  # the read-only preset would block.
+  - host: github.com
+    port: 443
+    protocol: rest
+    enforcement: enforce
+    rules:
+      - allow: { method: GET, path: "**" }
+      - allow: { method: HEAD, path: "**" }
+      - allow: { method: OPTIONS, path: "**" }
+      - allow: { method: POST, path: "/**/git-upload-pack" }
+binaries: [/usr/bin/gh, /usr/bin/git]

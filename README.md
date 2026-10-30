@@ -113,3 +113,6 @@ project requires them.
 
 Projects and caches survive restarts but are deleted when the environment is
 removed. Push or fetch important work before removal.
+
+An experimental [NVIDIA OpenShell](openshell/README.md) variant of this
+workspace lives in the `openshell/` directory.

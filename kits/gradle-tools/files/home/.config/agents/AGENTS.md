@@ -37,6 +37,7 @@ When explaining code:
 - Keep the body to at most 2–5 lines.
 - Never restate what is already obvious from the diff.
 - Refactor, rename, cleanup, and polish commits should normally have no body.
+- Do not add attribution lines such as `Co-Authored-By` or "Generated with ..." to commit messages or pull request descriptions.
 
 ## Code comments
 
